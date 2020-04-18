@@ -1,65 +1,263 @@
+import java.net.ServerSocket;
+import java.net.Socket;
 
-/*
- * 1. wait for number of participants specified to join - number is given as a parameter to the main function
- * 2. Send participant details to each participant once all participants have joined as "DETAILS [<Port>]"
- * 3. Send Requests for votes to all participants 
- * 4. Receive votes from participants 
- */
+import java.io.BufferedReader;
+import java.io.PrintWriter;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Iterator;
 
-import java.io.*;
-import java.net.*;
-/*
- * java Coordinator ⟨port⟩ ⟨lport⟩ ⟨parts⟩ ⟨timeout⟩ [⟨option⟩]
- * - ⟨port⟩ is the port number that the coordinator is listening on
- * - ⟨lport⟩ is the port number that the logger server is listening on
- * - ⟨parts⟩ is the number of participants that the coordinator expects
- * - [⟨option⟩] is a set (no duplicates) of options separated by spaces. 
- * - (timeout) should be used by the coordinator when waiting for a message from a participant, in order to decide whether 
- * 	 that participant has failed. For example, if we want to start the coordinator listening on port 12345, expecting the 
- * 	 logger server listening on port 12344, expecting 4 participants, with a timeout of 500 milliseconds and where the 
- * 	 options are A, B and C, then it will be executed as:  
- * 
- */
-public class Coordinator {
-	private ServerSocket coordinatorSocket;
-	private Integer port;
-	
-	
-	Coordinator() {
+
+public class Coordinator
+{
+    // Max # of clients. 
+    int _MAXCLIENTS;
+    // number of clients currently registered. 
+    private int _numOfClients = 0;
+    private String votingOptions;
+    
+    /** 
+     * Maps name to socket. Key is clientName, value is clientOut
+     */
+    private Map<String, PrintWriter > clientPorts = new HashMap<String, PrintWriter>();
+    
+    //inverse of clientPorts
+    private Map<PrintWriter,String> clientPortsInverse = new HashMap<PrintWriter, String>();
+    
+    /**
+     * Maps a participant to its outcome. Key is clientName, value is outcome
+     */
+    private Map<String, String> outcomes = new HashMap<String,String>();
+    private Map<String, ArrayList<String>> portsConsidered = new HashMap<String, ArrayList<String>>();
+    
+    /**
+     * For each client we create a thread that handles
+     * all i/o with that client.
+     */
+    private class ServerThread extends Thread {
+		private Socket clientSocket;
+		private String clientPort;
+		private BufferedReader clientInput;
+		private PrintWriter clientOutput;
 		
-	}
-	//
-	public void connect() throws IOException {
-		coordinatorSocket = new ServerSocket(port);
-		
-		while(true) {
-			
+		ServerThread(Socket client) throws IOException {
+			clientSocket = client;  
+		    // Open I/O steams
+		    clientInput = new BufferedReader( new InputStreamReader( client.getInputStream() ) );
+		    clientOutput = new PrintWriter( new OutputStreamWriter( client.getOutputStream() ) );
+		    // Welcome message.
 		}
-	}
-	
-	/*
-	 * As we will be using separate threads for each request, lets understand the working and implementation of the ClientHandler class 
-	 * extending Threads. An object of this class will be instantiated each time a request comes.
-	 * 1) this class extends Thread so that its objects assumes all properties of Threads.
-	 * 2) the constructor of this class takes three parameters, which can uniquely identify any incoming request, 
-	 * 	  i.e. a Socket, a DataInputStream to read from and a DataOutputStream to write to. Whenever we receive any request of client, 
-	 * 	  the server extracts its port number, the DataInputStream object and DataOutputStream object and creates a new thread object of 
-	 * 	  this class and invokes start() method on it.
-	 * Note : Every request will always have a triplet of socket, input stream and output stream. This ensures that each object of this class 
-	 * writes on one specific stream rather than on multiple streams.
-	 * 3) Inside the run() method of this class, it performs three operations: request the user to specify whether time or date needed, 
-	 * 	  read the answer from input stream object and accordingly write the output on the output stream object.
-	 */
-	class ClientHandler extends Thread {
-		/*
-		 * performs three operations:
-		 * 1) requests the user to specify whether time or date needed 
-		 * 2) reads the answer from the input stream object
-		 * 3) writes the output on the output stream object
-		 */
-		@Override
+		
+		//need to rewrite this
 		public void run() {
+			System.out.println("Thread Running");
+		    try {
+		    	System.out.println("debug line 1");
+		    	Token token = null;
+		    	ReqTokenizer reqTokenizer = new ReqTokenizer();
 			
+		    	// First, the client must register. If it doesn't send  join, close it
+		    	String lineRead = clientInput.readLine();
+		    	System.out.println(lineRead);
+		    	token = reqTokenizer.getToken(lineRead);
+		    	
+		    	if (!(token instanceof JoinToken)) {
+		    		clientSocket.close();
+		    		return;
+		    	}
+			
+			
+		    	// If this succeeds, process requests until client exits.
+		    	token = reqTokenizer.getToken(lineRead);
+		    	while (!(token instanceof OutcomeToken)) {
+				
+		    			//if the server is being asked by the client to join then send out the details and the Vote Options
+		    		//if(token instanceof JoinToken) {
+		    			System.out.println("Found Join message");
+						if(!(register(((JoinToken) token).getName(), clientOutput))) {
+							clientSocket.close();
+							return;
+						}
+						System.out.println("Got Join message: " + ((JoinToken) token).getName());
+						register(clientPort = ((JoinToken) token).getName(), clientOutput);
+						System.out.println("Number of participants connected: " + _numOfClients);
+						if(_numOfClients == _MAXCLIENTS) {
+							detailsMessage();
+							voteOptionsMessage();	
+						}
+	
+		    		//check for next token from the client
+		    		token = reqTokenizer.getToken(clientInput.readLine());
+		    	}
+		    
+		    	//if Outcome is sent to the coordinator
+		    	if(token instanceof OutcomeToken) {		    		
+		    		outcomeMessage(clientPort, ((OutcomeToken) token).getVoteChoice(), ((OutcomeToken) token).getPortsConsidered());
+		    		
+		    		for(String port : outcomes.keySet()) {
+		    			System.out.println("Outcome " + outcomes.get(port) + " from " + port + " with ports considered: " +
+		    					((OutcomeToken) token).getPortsConsidered());
+		    		}
+		    	
+		    		clientSocket.close();
+		    	}
+		    	unregister(clientPort);
+		    } catch (IOException e) {
+		    	System.out.println("Caught I/O Exception  due to: " + e.getMessage());
+		    	unregister(clientPort);
+		    } catch (NullPointerException e) {
+		    	unregister(clientPort);
+		    	System.out.println("Null pointer by: " + clientPort + " due to: " + e.getMessage());
+		    }
 		}
-	}
-}
+  }
+
+
+    /**
+     * Attempts to register the client under the specified name with a particular output stream (so we can send individual messages to it)
+     * @returns true if successful.
+     */
+    public boolean register(String name, PrintWriter out) {  
+    	
+    	//fail if too many clients connected
+    	if (_numOfClients >= _MAXCLIENTS) {
+    		System.out.println("Unexpected number of participants");
+    		return false;
+    	}
+    	
+    	//don't allow for multiples ports of the same port 
+    	if (clientPorts.containsKey(name)) {
+    		System.out.println("ChatServer: Port already joined.");
+    		return false;
+    	}
+    	
+    	try {
+    		clientPorts.put(name,out);
+    		clientPortsInverse.put(out, name);
+    	} catch (NullPointerException e) {
+    		System.out.println("Null Pointer exception thrown due to: " + e.getMessage());
+    		return false;
+    	}
+    	_numOfClients++;
+    	return true;
+    }
+
+    /**
+     * Unregisters the client with the specified name.
+     */
+    public void unregister(String name) {
+    	clientPorts.remove(name);
+		_numOfClients--;
+    }
+
+    
+    /** 
+     * Send the details message to all clients - need to work out how to remove a port
+     * HOW TO REMOVE PORT
+     */
+    synchronized public void detailsMessage() {
+    	String detailsMessage = "DETAILS ";
+    	
+    	
+    	//add every port to details
+    	Iterator<String> clientPortIt = clientPorts.keySet().iterator();
+   		while(clientPortIt.hasNext()) {
+   			String clientPort = clientPortIt.next();
+   			detailsMessage = detailsMessage + clientPort + " ";
+   		}
+   		System.out.println("line sent: " + detailsMessage);			
+    	//print to each individual client and remove their name 
+    	Iterator<PrintWriter> clientOutputIt = clientPorts.values().iterator();
+    	while (clientOutputIt.hasNext()) {
+   			//output stream for particular client
+   			PrintWriter pw = clientOutputIt.next();
+   			
+   			//need to initialise Port with p
+   			String portToRemove = clientPortsInverse.get(pw);
+   			
+   			detailsMessage = detailsMessage.replaceAll(portToRemove, "");
+   			
+   			pw.println(detailsMessage);
+   			pw.flush();
+   			
+   			detailsMessage = detailsMessage + portToRemove;
+   		}
+    	System.out.println("sent details");
+    }
+
+    /**
+     * Send the vote Options to every client
+     */
+    synchronized public void voteOptionsMessage() {
+    	String voteOptions = "VOTE_OPTIONS  " + votingOptions;
+    	System.out.println("line sent: " + voteOptions);
+    	
+    	Iterator<PrintWriter> clientOutputIt = clientPorts.values().iterator();
+    	while (clientOutputIt.hasNext()) {
+    		//output stream for particular client
+    		PrintWriter pw = clientOutputIt.next();
+    		pw.println(voteOptions);
+    		pw.flush();
+    	}
+    	System.out.println("sent voting options");
+    }
+    
+    /*
+     * receive the outcome message
+     * receives 
+     */
+    public void outcomeMessage(String participant, String voteOutcome, String ports) {
+    	outcomes.put(participant, voteOutcome);
+    	ArrayList<String> portsArr = new ArrayList<String>();
+    	
+    	for(String port : ports.split("\\s")) {
+    		portsArr.add(port);
+    	}
+    	
+    	portsConsidered.put(participant, portsArr);
+    	
+    }
+
+    /**
+     * Wait for a connection request. Sets up the server
+     */
+    public void startListening(Integer coordinatorPortNumber, Integer loggerPortNumber, Integer numberOfClients, String voteOptions, Integer timeOut) throws IOException {
+    	ServerSocket listener = new ServerSocket(coordinatorPortNumber);
+    	System.out.println("SERVER ONLINE AT PORT " + listener.getLocalPort());
+    	_MAXCLIENTS = numberOfClients;
+    	votingOptions = voteOptions;
+	
+    	while (true) {
+    		Socket client = listener.accept();
+    		System.out.println("socket accepted");
+    		System.out.println("sock port number is " + client.getPort());
+    		new ServerThread(client).start();
+    	}
+    }
+
+    public static void main(String[] args) throws IOException {
+    	if (args.length != 5) {
+    		System.out.println("Error: Not enough arguments");
+    		return;
+    	}
+    	Integer coordinatorPortNumber = Integer.parseInt(args[0]); 
+    	Integer loggerPortNumber = Integer.parseInt(args[1]);
+    	Integer numberOfClients = Integer.parseInt(args[2]);
+    	String voteOptions = args[3];
+    	Integer timeOut = Integer.parseInt(args[4]);
+    	new Coordinator().startListening(coordinatorPortNumber, loggerPortNumber, numberOfClients, voteOptions, timeOut);
+    }
+} 
+
+
+
+
+
+
+
+
