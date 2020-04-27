@@ -1,16 +1,10 @@
-import java.net.ServerSocket;
-import java.net.Socket;
-
-import java.io.BufferedReader;
-import java.io.PrintWriter;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.io.IOException;
+import java.net.*;
+import java.io.*;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Iterator;
+import java.util.List;
 
 
 public class Coordinator
@@ -20,20 +14,27 @@ public class Coordinator
     // number of clients currently registered. 
     private int _numOfClients = 0;
     private String votingOptions;
+    private ArrayList<String> votingOptionsArr = new ArrayList<String>();
     
     /** 
-     * Maps name to socket. Key is clientName, value is clientOut
+     * Maps name to socket. Key is clientName, value is clientOut - can't change string for integer because it breaks it (lol)
      */
     private Map<String, PrintWriter > clientPorts = new HashMap<String, PrintWriter>();
     
-    //inverse of clientPorts
+    //inverse of clientPorts - can't change string for integer as breaks it
     private Map<PrintWriter,String> clientPortsInverse = new HashMap<PrintWriter, String>();
     
+    private ArrayList<Integer> portsInDetails = new ArrayList<Integer>();
     /**
      * Maps a participant to its outcome. Key is clientName, value is outcome
      */
     private Map<String, String> outcomes = new HashMap<String,String>();
     private Map<String, ArrayList<String>> portsConsidered = new HashMap<String, ArrayList<String>>();
+    
+    
+
+    //private Integer coordinatorPortNumberLog;
+    //private Network network;
     
     /**
      * For each client we create a thread that handles
@@ -57,7 +58,6 @@ public class Coordinator
 		public void run() {
 			System.out.println("Thread Running");
 		    try {
-		    	System.out.println("debug line 1");
 		    	Token token = null;
 		    	ReqTokenizer reqTokenizer = new ReqTokenizer();
 			
@@ -70,7 +70,11 @@ public class Coordinator
 		    		clientSocket.close();
 		    		return;
 		    	}
-			
+		    	
+				if(!(register(((JoinToken) token).getName(), clientOutput))) {
+					clientSocket.close();
+					return;
+				}
 			
 		    	// If this succeeds, process requests until client exits.
 		    	token = reqTokenizer.getToken(lineRead);
@@ -79,16 +83,17 @@ public class Coordinator
 		    			//if the server is being asked by the client to join then send out the details and the Vote Options
 		    		//if(token instanceof JoinToken) {
 		    			System.out.println("Found Join message");
-						if(!(register(((JoinToken) token).getName(), clientOutput))) {
-							clientSocket.close();
-							return;
-						}
-						System.out.println("Got Join message: " + ((JoinToken) token).getName());
-						register(clientPort = ((JoinToken) token).getName(), clientOutput);
-						System.out.println("Number of participants connected: " + _numOfClients);
+				    	if(token instanceof JoinToken) {
+				    		register(clientPort = ((JoinToken) token).getName(), clientOutput);
+				    		CoordinatorLogger.getLogger().joinReceived(Integer.parseInt(((JoinToken) token).getName()));
+				    	}
+						
+						
 						if(_numOfClients == _MAXCLIENTS) {
 							detailsMessage();
-							voteOptionsMessage();	
+							voteOptionsMessage();
+							tellParticipantsToStartVoting();
+							//this.interrupt();
 						}
 	
 		    		//check for next token from the client
@@ -100,19 +105,25 @@ public class Coordinator
 		    		outcomeMessage(clientPort, ((OutcomeToken) token).getVoteChoice(), ((OutcomeToken) token).getPortsConsidered());
 		    		
 		    		for(String port : outcomes.keySet()) {
-		    			System.out.println("Outcome " + outcomes.get(port) + " from " + port + " with ports considered: " +
-		    					((OutcomeToken) token).getPortsConsidered());
+		    			System.out.println("Outcome " +  ((OutcomeToken) token).getVoteChoice() + ((OutcomeToken) token).getPortsConsidered());
 		    		}
-		    	
-		    		clientSocket.close();
+		    		
+		    		//clientSocket.close();
 		    	}
 		    	unregister(clientPort);
 		    } catch (IOException e) {
 		    	System.out.println("Caught I/O Exception  due to: " + e.getMessage());
+		    	e.printStackTrace();
 		    	unregister(clientPort);
 		    } catch (NullPointerException e) {
 		    	unregister(clientPort);
 		    	System.out.println("Null pointer by: " + clientPort + " due to: " + e.getMessage());
+		    	e.printStackTrace();
+		    } catch (Exception e) {
+				// TODO Auto-generated catch block
+		    	System.out.println("Thrown Exception due to: " + " due to: " + e.getMessage());
+		    	e.printStackTrace();
+		    	unregister(clientPort);
 		    }
 		}
   }
@@ -138,6 +149,8 @@ public class Coordinator
     	
     	try {
     		clientPorts.put(name,out);
+    		portsInDetails.add(Integer.parseInt(name));
+    		
     		clientPortsInverse.put(out, name);
     	} catch (NullPointerException e) {
     		System.out.println("Null Pointer exception thrown due to: " + e.getMessage());
@@ -161,7 +174,7 @@ public class Coordinator
      * HOW TO REMOVE PORT
      */
     synchronized public void detailsMessage() {
-    	String detailsMessage = "DETAILS ";
+    	String detailsMessage = "";
     	
     	
     	//add every port to details
@@ -169,8 +182,7 @@ public class Coordinator
    		while(clientPortIt.hasNext()) {
    			String clientPort = clientPortIt.next();
    			detailsMessage = detailsMessage + clientPort + " ";
-   		}
-   		System.out.println("line sent: " + detailsMessage);			
+   		}		
     	//print to each individual client and remove their name 
     	Iterator<PrintWriter> clientOutputIt = clientPorts.values().iterator();
     	while (clientOutputIt.hasNext()) {
@@ -182,18 +194,34 @@ public class Coordinator
    			
    			detailsMessage = detailsMessage.replaceAll(portToRemove, "");
    			
-   			pw.println(detailsMessage);
+   			
+   			
+   			
+   			
+   			System.out.println("line sent: DETAILS " + detailsMessage);	
+   			pw.println("DETAILS " + detailsMessage);
+   			CoordinatorLogger.getLogger().detailsSent(Integer.parseInt(clientPortsInverse.get(pw)), remove(Integer.parseInt(clientPortsInverse.get(pw)),portsInDetails));
    			pw.flush();
    			
    			detailsMessage = detailsMessage + portToRemove;
+
    		}
     	System.out.println("sent details");
     }
-
+    
+    public ArrayList<Integer> remove(Integer valueToRemove, ArrayList<Integer> removeFrom) {
+    	ArrayList<Integer> array = new ArrayList<Integer>();
+    	array.addAll(removeFrom);
+    	array.remove(valueToRemove);
+    	
+    	return array;
+    }
+    
     /**
      * Send the vote Options to every client
+     * @throws IOException 
      */
-    synchronized public void voteOptionsMessage() {
+    synchronized public void voteOptionsMessage() throws IOException {
     	String voteOptions = "VOTE_OPTIONS  " + votingOptions;
     	System.out.println("line sent: " + voteOptions);
     	
@@ -202,9 +230,32 @@ public class Coordinator
     		//output stream for particular client
     		PrintWriter pw = clientOutputIt.next();
     		pw.println(voteOptions);
+    		CoordinatorLogger.getLogger().voteOptionsSent(Integer.parseInt(clientPortsInverse.get(pw)), votingOptionsArr);
     		pw.flush();
     	}
     	System.out.println("sent voting options");
+    }
+    
+    /**
+     * Method that sends out to every participant the message "VOTING_ROUNDS BEGIN"
+     * @throws Exception 
+     */
+	synchronized public void tellParticipantsToStartVoting() throws Exception {
+    	
+    	Iterator<PrintWriter> clientOutputIt = clientPorts.values().iterator();
+    	//tell the clients to start the voting rounds
+    	while (clientOutputIt.hasNext()) {
+    		//output stream for particular client
+    		PrintWriter pw = clientOutputIt.next();
+    		pw.println("VOTING_ROUNDS BEGIN");
+    		pw.flush();
+    	}
+    	System.out.println("VOTING_ROUNDS BEGIN");
+    	//network = new Network(votingOptionsArr, clientPorts.keySet());
+    	//network.runOutcomes();
+    	//network = new Network((coordinatorPortNumberLog+1), clientPorts.keySet().size());
+    	
+    	
     }
     
     /*
@@ -212,7 +263,7 @@ public class Coordinator
      * receives 
      */
     public void outcomeMessage(String participant, String voteOutcome, String ports) {
-    	outcomes.put(participant, voteOutcome);
+    	outcomes.put(participant, voteOutcome + " " + ports);
     	ArrayList<String> portsArr = new ArrayList<String>();
     	
     	for(String port : ports.split("\\s")) {
@@ -220,27 +271,41 @@ public class Coordinator
     	}
     	
     	portsConsidered.put(participant, portsArr);
+    	CoordinatorLogger.getLogger().outcomeReceived(Integer.parseInt(participant), voteOutcome);
     	
     }
 
     /**
      * Wait for a connection request. Sets up the server
      */
-    public void startListening(Integer coordinatorPortNumber, Integer loggerPortNumber, Integer numberOfClients, String voteOptions, Integer timeOut) throws IOException {
-    	ServerSocket listener = new ServerSocket(coordinatorPortNumber);
-    	System.out.println("SERVER ONLINE AT PORT " + listener.getLocalPort());
-    	_MAXCLIENTS = numberOfClients;
-    	votingOptions = voteOptions;
+    public void startListening(Integer coordinatorPortNumber, Integer loggerPortNumber, Integer numberOfClients, String voteOptions, Integer timeOut) {
+    	try {
+    		ServerSocket listener = new ServerSocket(coordinatorPortNumber);
+    		//coordinatorPortNumberLog = coordinatorPortNumber;
+    		System.out.println("SERVER ONLINE AT PORT " + listener.getLocalPort());
+    		CoordinatorLogger.initLogger(loggerPortNumber, coordinatorPortNumber, timeOut);
+    		CoordinatorLogger.getLogger().startedListening(listener.getLocalPort());
+    		_MAXCLIENTS = numberOfClients;
+    		votingOptions = voteOptions;
+    		for(int i=0; i<voteOptions.split("\\s").length; i++) {
+    			votingOptionsArr.add(voteOptions.split("\\s")[i]);
+    		}
 	
-    	while (true) {
-    		Socket client = listener.accept();
-    		System.out.println("socket accepted");
-    		System.out.println("sock port number is " + client.getPort());
-    		new ServerThread(client).start();
+    		while (true) {
+    			Socket client = listener.accept();
+    			System.out.println("socket accepted");
+    			System.out.println("sock port number is " + client.getPort());
+    			CoordinatorLogger.getLogger().connectionAccepted(client.getPort());
+
+    			new ServerThread(client).start();
+    		}
+    	}catch(IOException e) {
+    		System.out.println("IOException thrown in Coordinator.startListening due to: ");
+    		e.printStackTrace();
     	}
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) {
     	if (args.length != 5) {
     		System.out.println("Error: Not enough arguments");
     		return;
@@ -251,6 +316,7 @@ public class Coordinator
     	String voteOptions = args[3];
     	Integer timeOut = Integer.parseInt(args[4]);
     	new Coordinator().startListening(coordinatorPortNumber, loggerPortNumber, numberOfClients, voteOptions, timeOut);
+
     }
 } 
 
