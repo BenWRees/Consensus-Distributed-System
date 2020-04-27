@@ -4,6 +4,7 @@ import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.TimeUnit;
 
+
 /*
  * Java Participant ⟨cport⟩ ⟨lport⟩ ⟨pport⟩ ⟨timeout⟩
  * - ⟨cport⟩ is the port number that the coordinator is listening on 
@@ -36,7 +37,7 @@ public class Participant {
 	
 	private String outcome = "";
 	private String voteDecided;
-	private List<Integer> portsConsidered;
+	private List<Integer> portsConsidered = new ArrayList<Integer>();;
 	
 	private boolean join = false;
 
