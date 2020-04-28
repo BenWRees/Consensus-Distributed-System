@@ -101,14 +101,10 @@ public class Coordinator
 		    	}
 		    
 		    	//if Outcome is sent to the coordinator
-		    	if(token instanceof OutcomeToken) {		    		
+		    	if(token instanceof OutcomeToken) {		
 		    		outcomeMessage(clientPort, ((OutcomeToken) token).getVoteChoice(), ((OutcomeToken) token).getPortsConsidered());
 		    		
-		    		for(String port : outcomes.keySet()) {
-		    			System.out.println("Outcome " +  ((OutcomeToken) token).getVoteChoice() + ((OutcomeToken) token).getPortsConsidered());
-		    		}
-		    		
-		    		//clientSocket.close();
+		    		clientSocket.close();
 		    	}
 		    	unregister(clientPort);
 		    } catch (IOException e) {
@@ -116,9 +112,9 @@ public class Coordinator
 		    	e.printStackTrace();
 		    	unregister(clientPort);
 		    } catch (NullPointerException e) {
-		    	unregister(clientPort);
 		    	System.out.println("Null pointer by: " + clientPort + " due to: " + e.getMessage());
 		    	e.printStackTrace();
+                unregister(clientPort);
 		    } catch (Exception e) {
 				// TODO Auto-generated catch block
 		    	System.out.println("Thrown Exception due to: " + " due to: " + e.getMessage());
@@ -194,16 +190,12 @@ public class Coordinator
    			
    			detailsMessage = detailsMessage.replaceAll(portToRemove, "");
    			
-   			
-   			
-   			
-   			
    			System.out.println("line sent: DETAILS " + detailsMessage);	
    			pw.println("DETAILS " + detailsMessage);
    			CoordinatorLogger.getLogger().detailsSent(Integer.parseInt(clientPortsInverse.get(pw)), remove(Integer.parseInt(clientPortsInverse.get(pw)),portsInDetails));
    			pw.flush();
    			
-   			detailsMessage = detailsMessage + portToRemove;
+   			detailsMessage = detailsMessage + portToRemove + " ";
 
    		}
     	System.out.println("sent details");
@@ -222,8 +214,8 @@ public class Coordinator
      * @throws IOException 
      */
     synchronized public void voteOptionsMessage() throws IOException {
-    	String voteOptions = "VOTE_OPTIONS  " + votingOptions;
-    	System.out.println("line sent: " + voteOptions);
+    	String voteOptions = "VOTE_OPTIONS  " + votingOptions + " ";
+    	System.out.println("line sent: " + voteOptions + " ");
     	
     	Iterator<PrintWriter> clientOutputIt = clientPorts.values().iterator();
     	while (clientOutputIt.hasNext()) {
@@ -251,10 +243,6 @@ public class Coordinator
     		pw.flush();
     	}
     	System.out.println("VOTING_ROUNDS BEGIN");
-    	//network = new Network(votingOptionsArr, clientPorts.keySet());
-    	//network.runOutcomes();
-    	//network = new Network((coordinatorPortNumberLog+1), clientPorts.keySet().size());
-    	
     	
     }
     
@@ -271,6 +259,9 @@ public class Coordinator
     	}
     	
     	portsConsidered.put(participant, portsArr);
+
+        System.out.println("OUTCOME " + voteOutcome + ports);
+
     	CoordinatorLogger.getLogger().outcomeReceived(Integer.parseInt(participant), voteOutcome);
     	
     }
