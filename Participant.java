@@ -72,9 +72,11 @@ public class Participant {
 		} catch(IOException e) {
 			System.out.println("IO Exception thrown due to: " + e.getMessage());
 			e.printStackTrace();
+			ParticipantLogger.getLogger().participantCrashed(participantPortNumberLog);
 		} catch(Exception e) {
 			System.out.println("Exception thrown due to: " + e.getMessage());
 			e.printStackTrace();
+			ParticipantLogger.getLogger().participantCrashed(participantPortNumberLog);
 		}
 	}
 	
