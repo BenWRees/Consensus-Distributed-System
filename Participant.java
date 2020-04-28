@@ -36,15 +36,9 @@ public class Participant {
 	//private PeerNode participantPeerNode = null;
 	
 	private String outcome = "";
-	private String voteDecided;
+	private String voteDecided = "";
 	private List<Integer> portsConsidered = new ArrayList<Integer>();;
-	
-	private boolean join = false;
-
-	private boolean details = false;
-
-	private boolean voteOptions = false;
-	
+	private Integer timeout;
 	private PeerNode peer = null;
 
 	
@@ -57,6 +51,7 @@ public class Participant {
 		try {
 			participantPortNumberLog = participantPortNumber;
 			coordinatorPortNumberLog = coordinatorPortNumber;
+			this.timeout = timeOut;
 			openConnection(coordinatorPortNumber, participantPortNumber);
 			//participantSocket = new Socket("localhost", coordinatorPortNumber, null, participantPortNumber);
 			System.out.println("NEW SOCKET CREATED"); 
@@ -93,6 +88,7 @@ public class Participant {
 		while(flag) {
 			try {
 				participantSocket = new Socket("localhost", coordinatorPortNumber, null, participantPortNumber);
+				participantSocket.setSoTimeout(timeout);
 				flag = false;
 			} catch(IOException e) {
 				try {
@@ -150,6 +146,7 @@ public class Participant {
 				outcome += votingProtocol();
 				System.out.println(outcome);
 				sendOutcome();
+				return;
 				//this.start();
 				//need to get a separate socket in participant to connect to a server socket in the Network class
 			}
@@ -169,7 +166,7 @@ public class Participant {
 		//print out every port - needs to be split by "[", "]" and ","
 		for(int i=1; i < details.split("\\s").length; i++) {
 			System.out.println("Port Numbers received " + details.split("\\s")[i] + " ");
-			participantPorts = participantPorts + details.split("\\s")[i] + " ";
+			participantPorts += details.split("\\s")[i] + " ";
 			participants.add(Integer.parseInt(details.split("\\s")[i]));
 		}						
 		
@@ -196,7 +193,17 @@ public class Participant {
 	}
 	
 	public String votingProtocol() {
-		peer.startListening(participantPortNumberLog, participants);
+		ParticipantLogger.getLogger().startedListening();
+		peer.startListening(participantPortNumberLog, participants, timeout);
+		
+		for(Integer port : peer.getPortsConnectedToPeers()) {
+			ParticipantLogger.getLogger().connectionAccepted(port);
+		}
+
+		for(Integer port : peer.getConnectionsToOtherPorts()) {
+			ParticipantLogger.getLogger().connectionEstablished(port);
+		}
+
 		HashSet<String> values = new HashSet<String>();
 		HashSet<String> valuesOfPreviousRound = new HashSet<String>();
 		HashSet<String> valuesOfNextRound = new HashSet<String>();
@@ -223,6 +230,9 @@ public class Participant {
 			valuesOfNextRound.addAll(values);
 			try {
 				HashSet<String> messagesReceived = new HashSet<String>(peer.multicastReceive());
+				if(messagesReceived.isEmpty()) {
+					return outcomeDecision(values);
+				}
 				valuesOfNextRound.addAll(messagesReceived);
 				System.out.println("MESSAGES RECEIVED FROM OTHER PARTICIPANTS " + messagesReceived.toString() + " for " + participantPortNumberLog);
 				System.out.println("MESSAGES RECEIVED ADDED TO VALUES OF NEXT ROUND: " + valuesOfNextRound.toString());
@@ -240,6 +250,10 @@ public class Participant {
 
 			System.out.println("Next round's Values: " + values + " for " + participantPortNumberLog);
 			System.out.println("Next Round's previous values: " + valuesOfPreviousRound + "\n");
+
+			if(values.equals(valuesOfPreviousRound)) {
+				return outcomeDecision(values);
+			}
 
 		}
 
@@ -262,10 +276,12 @@ public class Participant {
 		for(String vote : values) {
 			portsInvolved += vote.split("\\s")[0] + " " ;
 		}
+
+		voteDecided += voteDecider(values);
 		//System.out.println("ports involved: " + portsInvolved);
 		//System.out.println("Decided Vote: " + voteDecider(values) + " from " + participantPortNumber);
 		//decided vote should be the maximum of all the votes collected from values
-		return "OUTCOME " + voteDecider(values) + " " +  portsInvolved;
+		return "OUTCOME " + voteDecided + " " +  portsInvolved;
 	}
 	
 
@@ -334,13 +350,13 @@ public class Participant {
 	/**
 	 * just sends the outcome message to the coordinator
 	 */
-	public void sendOutcome() {
-		participantOutChannel.flush();
+	public void sendOutcome() throws IOException {
 		participantOutChannel.println(outcome);
 		for(int i=2; i < outcome.split("\\s").length;i++ ) {
 			portsConsidered.add(Integer.parseInt(outcome.split("\\s")[i]));
 		}
 		ParticipantLogger.getLogger().outcomeNotified(voteDecided, portsConsidered);
+		participantOutChannel.flush();
 		
 	}
 	
