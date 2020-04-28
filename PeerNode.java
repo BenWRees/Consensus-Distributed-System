@@ -2,11 +2,11 @@ import java.net.*;
 import java.io.*;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.lang.*;
 
 
 public class PeerNode {
 	private String peerPortNumber = "";
-	private ArrayList<Integer> otherPortsInNetwork = new ArrayList<Integer>();
 	private HashSet<String> messages = new HashSet<String>();
 	private ServerSocket serverSock = null;
 	private Map<Socket, PrintWriter> socketToOutput = new HashMap<Socket,PrintWriter>(); 
@@ -47,6 +47,7 @@ public class PeerNode {
 		}
 	}
 
+
 	//go through every single socket, check if connected. If it's connected we read the output on the socket 
 	synchronized public HashSet<String> multicastReceive() throws IOException {
 		messages.clear();
@@ -65,8 +66,28 @@ public class PeerNode {
 		return messages;
 	}
 
-	public void startListening(Integer port, ArrayList<Integer> otherPorts) {
-		this.otherPortsInNetwork.addAll(otherPorts);
+	public ArrayList<Integer> getConnectionsToOtherPorts() {
+		ArrayList<Integer> connectionPorts = new ArrayList<Integer>();
+
+		for(Socket sock : connectionsToOtherPorts) {
+			connectionPorts.add(sock.getLocalPort());
+		}
+
+		return connectionPorts;
+	}
+
+	public ArrayList<Integer> getPortsConnectedToPeers() {
+		ArrayList<Integer> portsConnected = new ArrayList<Integer>();
+
+		for(Socket sock : portsConnectedToPeer) {
+			portsConnected.add(sock.getLocalPort());
+		}
+
+		return portsConnected;
+	}
+
+	//need to stop hanging if a participant has crashed -
+	public void startListening(Integer port, ArrayList<Integer> otherPorts, Integer timeout) {
 		try {
 			ServerSocket serverSock = new ServerSocket(port);
 
@@ -74,6 +95,8 @@ public class PeerNode {
 			for(Integer portToConnectTo : otherPorts) {
 				boolean flag = true;
 				Socket socket = null;
+				long startTime = System.currentTimeMillis();
+				//if the port takes too long, then skip it 
 				while(flag) {
 					try {
 						socket = new Socket("localhost", portToConnectTo);
