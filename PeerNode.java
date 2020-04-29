@@ -10,7 +10,9 @@ public class PeerNode {
 	private ServerSocket serverSock = null;
 	private Map<Socket, PrintWriter> socketToOutput = new HashMap<Socket,PrintWriter>(); 
 	private ArrayList<Socket> connectionsToOtherPorts = new ArrayList<Socket>();
-	private ArrayList<Socket> portsConnectedToPeer = new ArrayList<Socket>();
+	private ArrayList<Integer> portsConnectedToPeer = new ArrayList<Integer>();
+	private ArrayList<Socket> crashedPeer = new ArrayList<Socket>();
+	private ArrayList<Integer> initPorts;
 
 
 	//class represents other sockets trying to reach out and send a message in 
@@ -23,21 +25,6 @@ public class PeerNode {
 			this.client = client;
 			out = new PrintWriter(new OutputStreamWriter(client.getOutputStream()));
 			socketToOutput.put(client,out);
-		}
-	}
-
-	/*
-	 * crashes a peer 
-	 * 	- closes its server sock to receiving messages
-	 * 	- removes all the peers it knows to send to - stops it from sending messages again
-	 *	- removes it from 
-	 */
-	public void crashPeer() {
-		try {
-			this.serverSock.close();
-			socketToOutput.clear();
-		} catch(IOException e) {
-			System.out.println("IOException thrown due to participant crashing out");
 		}
 	}
 
@@ -62,6 +49,7 @@ public class PeerNode {
 		while (outputIt.hasNext()) {
 	    		PrintWriter pw = (PrintWriter) outputIt.next();
 	    		pw.println(txt);
+	    		System.out.println("MESSAGES SENT TO OTHER PEERS " + txt);
 	    		pw.flush();
 		}
 	}
@@ -85,7 +73,7 @@ public class PeerNode {
 		messages.clear();
 		for(Socket socket: connectionsToOtherPorts) {
 			try {
-				if(socket.isConnected()) {
+				if(socket.isConnected() && (!crashedPeer.contains(socket))) {
 					BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 					String msg = in.readLine();
 					
@@ -96,10 +84,12 @@ public class PeerNode {
 					} else {continue;}
 
 				}
+
 			//due to their being no message etc. - should consider that port crashed 
 			} catch(IOException e) {
 				//stop receiving from this socket
-				connectionsToOtherPorts.remove(socket);
+				//connectionsToOtherPorts.remove(socket);
+				crashedPeer.add(socket);
 				//stop sending to this socket
 				socketToOutput.remove(socket);
 			}
@@ -112,29 +102,39 @@ public class PeerNode {
 		ArrayList<Integer> connectionPorts = new ArrayList<Integer>();
 
 		for(Socket sock : connectionsToOtherPorts) {
-			connectionPorts.add(sock.getLocalPort());
+			connectionPorts.add(sock.getPort());
 		}
 
 		return connectionPorts;
 	}
 
 	public ArrayList<Integer> getPortsConnectedToPeers() {
-		ArrayList<Integer> portsConnected = new ArrayList<Integer>();
 
-		for(Socket sock : portsConnectedToPeer) {
-			portsConnected.add(sock.getLocalPort());
+		return portsConnectedToPeer;
+	}
+
+	public ArrayList<Integer> getCrashedPeers(ArrayList<Integer> participantPorts) {
+		ArrayList<Integer> crashedPorts = new ArrayList<Integer>();
+		for(Integer participantPort : participantPorts) {
+			if(!initPorts.contains(participantPort)) {
+				crashedPorts.add(participantPort);
+			}
 		}
-
-		return portsConnected;
+		return crashedPorts;
 	}
 
 	//need to stop hanging if a participant has crashed -
 	public void startListening(Integer port, ArrayList<Integer> otherPorts, Integer timeout) {
 		try {
-
+			initPorts = new ArrayList<Integer>(otherPorts);
 			serverSock = new ServerSocket(port);
-			serverSock.setSoTimeout(timeout*otherPorts.size());
-
+			System.out.println("PORT SERVERSOCK IS ON: " + serverSock.getLocalPort());
+			try {
+				TimeUnit.SECONDS.sleep(2);
+			} catch(InterruptedException e) {
+				System.out.println("Sleeping has been interrupted in PeerNode.startListening");
+			}
+			//System.out.println(otherPorts.toString());
 			//create sockets to connect to other peers - for receiving messages 
 			for(Integer portToConnectTo : otherPorts) {
 				boolean flag = true;
@@ -146,29 +146,54 @@ public class PeerNode {
 						connectionsToOtherPorts.add(socket);
 						flag = false;
 					} catch(IOException e) {
-							continue;
+						System.out.println(portToConnectTo + " HAS CRASHED");
+						initPorts.remove(portToConnectTo);
+						flag = false;
+						continue;
 					}
 				}	
 			}
+
+			System.out.println("PORTS CONNECTED TO: " + connectionsToOtherPorts.toString());
 
 			//let sockets from other peers connect to this peer - for sending messages 
 			boolean flag = true;
 			//if the port takes too long, then skip it 
 			while(flag) {
-				if(portsConnectedToPeer.size() == otherPorts.size()) {
+				if(portsConnectedToPeer.size() == initPorts.size()) {
 					flag = false;
 					break;
 				}
 				Socket client = serverSock.accept();
 				client.setSoTimeout(timeout*otherPorts.size());
-				portsConnectedToPeer.add(client);
+				portsConnectedToPeer.add(client.getLocalPort());
 				new PeerThread(client);
 					
 			}
+			System.out.println("PORTS CONNECTED TO PEER: " + portsConnectedToPeer.toString());
 		}catch(IOException e) {
 			System.out.println("IOException caught in PeerNode.startListening due to: ");
 			e.printStackTrace();
 		}
+	}
+
+
+
+
+
+	/**
+	 *
+	 * @param portNumber : an Integer representing the port number the serverSocket is waiting on
+	 * @return boolean : true if the server is available and false otherwise
+	 */
+	public boolean serverIsOnline(Integer portNumber) {
+		try {
+			Socket socket = new Socket("localhost", portNumber);
+			return true;
+		} catch(IOException e) {
+			return false;
+		}
+
 	}
 
 
