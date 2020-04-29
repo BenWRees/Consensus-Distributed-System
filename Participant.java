@@ -53,6 +53,7 @@ public class Participant {
 			coordinatorPortNumberLog = coordinatorPortNumber;
 			this.timeout = timeOut;
 			openConnection(coordinatorPortNumber, participantPortNumber);
+			participantSocket.setSoTimeout(timeOut);
 			//participantSocket = new Socket("localhost", coordinatorPortNumber, null, participantPortNumber);
 			System.out.println("NEW SOCKET CREATED"); 
 			
@@ -147,12 +148,14 @@ public class Participant {
 				System.out.println("Begin Voting Rounds");
 				outcome += votingProtocol();
 				System.out.println(outcome);
-				sendOutcome();
-				return;
-				//this.start();
-				//need to get a separate socket in participant to connect to a server socket in the Network class
+				if(outcome == null) {
+					return;
+				} else { 
+					sendOutcome();
+					return;
+				}
+				
 			}
-			
 			
 			token = reqTokenizer.getToken(participantInChannel.readLine());
 
@@ -194,11 +197,7 @@ public class Participant {
 		ParticipantLogger.getLogger().voteOptionsReceived(votingOptionsArr);
 	}
 	
-	public String votingProtocol() {
-		
-		ParticipantLogger.getLogger().startedListening();
-		peer.startListening(participantPortNumberLog, participants, timeout);
-		
+	public void sendPeerInitialMessages(PeerNode peer) {
 		for(Integer port : peer.getPortsConnectedToPeers()) {
 			ParticipantLogger.getLogger().connectionAccepted(port);
 		}
@@ -210,6 +209,14 @@ public class Participant {
 		for(Integer port : peer.getCrashedPeers(participants)) {
 			ParticipantLogger.getLogger().participantCrashed(port);
 		}
+	}
+
+	public String votingProtocol() {
+
+		ParticipantLogger.getLogger().startedListening();
+		peer.startListening(participantPortNumberLog, participants, timeout);
+
+		sendPeerInitialMessages(peer);
 
 		HashSet<String> values = new HashSet<String>();
 		HashSet<String> valuesOfPreviousRound = new HashSet<String>();
@@ -223,76 +230,78 @@ public class Participant {
 		int round = 1;
 
 		for(round = 1; round <= (participants.size()+2); round++) {
-			long roundStartTime = System.currentTimeMillis();
-			ParticipantLogger.getLogger().beginRound(round);
+			try {
+				peer.startServersTimeout(participants);
+				long roundStartTime = System.currentTimeMillis();
+				ParticipantLogger.getLogger().beginRound(round);
 
-			System.out.println("\nCURRENT ROUND IS: " + round);
-			System.out.println("current Values are: " + values + " for " + participantPortNumberLog);
-			HashSet<String> valuesToSend = new HashSet<String>(values);
-			valuesToSend.removeAll(valuesOfPreviousRound);
-			
-			peer.multicastSend(valuesToSend);
-			
-			for(Integer port : peer.getPortsInSend()) {
-				ArrayList<Vote> votesSent = new ArrayList<Vote>();
-				for(String valuesToRecord : valuesToSend) {
-					for(int i=0; i<valuesToRecord.split("\\s").length; i=i+2) {
-						votesSent.add(new Vote(Integer.parseInt(valuesToRecord.split("\\s")[i]), valuesToRecord.split("\\s")[i+1]));
+				System.out.println("\nCURRENT ROUND IS: " + round);
+				System.out.println("current Values are: " + values + " for " + participantPortNumberLog);
+				HashSet<String> valuesToSend = new HashSet<String>(values);
+				valuesToSend.removeAll(valuesOfPreviousRound);
+				
+				peer.multicastSend(valuesToSend);
+				
+				for(Integer port : peer.getPortsInSend()) {
+					ArrayList<Vote> votesSent = new ArrayList<Vote>();
+					for(String valuesToRecord : valuesToSend) {
+						for(int i=0; i<valuesToRecord.split("\\s").length; i=i+2) {
+							votesSent.add(new Vote(Integer.parseInt(valuesToRecord.split("\\s")[i]), valuesToRecord.split("\\s")[i+1]));
+						}
 					}
+
+					ParticipantLogger.getLogger().votesSent(port, votesSent);
 				}
+				
+				valuesOfNextRound.clear();
+				valuesOfNextRound.addAll(values);
 
-				ParticipantLogger.getLogger().votesSent(port, votesSent);
-			}
-			
-			valuesOfNextRound.clear();
-			valuesOfNextRound.addAll(values);
+				HashSet<String> messagesReceived = new HashSet<String>(peer.multicastReceive(timeout));
+				valuesOfNextRound.addAll(messagesReceived);
 
-			HashSet<String> messagesReceived = new HashSet<String>(peer.multicastReceive(timeout));
-			valuesOfNextRound.addAll(messagesReceived);
+				/*
+				if(messagesReceived.isEmpty()) {
+					return outcomeDecision(values);
+				}
+				*/			
+				for(Integer port : peer.getConnectionsToOtherPorts()) {
+					ArrayList<Vote> votesReceived = new ArrayList<Vote>();
 
-			/*
-			if(messagesReceived.isEmpty()) {
-				return outcomeDecision(values);
-			}
-			*/			
-			for(Integer port : peer.getConnectionsToOtherPorts()) {
-				ArrayList<Vote> votesReceived = new ArrayList<Vote>();
-
-				for(String valuesToRecord : messagesReceived) {
-					for(int i=0; i<valuesToRecord.split("\\s").length; i=i+2) {
-						votesReceived.add(new Vote(Integer.parseInt(valuesToRecord.split("\\s")[i]), valuesToRecord.split("\\s")[i+1]));
+					for(String valuesToRecord : messagesReceived) {
+						for(int i=0; i<valuesToRecord.split("\\s").length; i=i+2) {
+							votesReceived.add(new Vote(Integer.parseInt(valuesToRecord.split("\\s")[i]), valuesToRecord.split("\\s")[i+1]));
+						}
 					}
+
+					ParticipantLogger.getLogger().votesReceived(port, votesReceived);
 				}
+				
+				System.out.println("MESSAGES RECEIVED FROM OTHER PARTICIPANTS " + messagesReceived.toString() + " for " + participantPortNumberLog);
+				System.out.println("MESSAGES RECEIVED ADDED TO VALUES OF NEXT ROUND: " + valuesOfNextRound.toString());
 
-				ParticipantLogger.getLogger().votesReceived(port, votesReceived);
-			}
-			
-			System.out.println("MESSAGES RECEIVED FROM OTHER PARTICIPANTS " + messagesReceived.toString() + " for " + participantPortNumberLog);
-			System.out.println("MESSAGES RECEIVED ADDED TO VALUES OF NEXT ROUND: " + valuesOfNextRound.toString());
+				//round r values become round r-1
+				valuesOfPreviousRound.clear();
+				valuesOfPreviousRound.addAll(values);
 
-			//round r values become round r-1
-			valuesOfPreviousRound.clear();
-			valuesOfPreviousRound.addAll(values);
+				values.clear();
+				values.addAll(valuesOfNextRound);
 
-			values.clear();
-			values.addAll(valuesOfNextRound);
+				System.out.println("Next round's Values: " + values + " for " + participantPortNumberLog);
+				System.out.println("Next Round's previous values: " + valuesOfPreviousRound + "\n");
 
-			System.out.println("Next round's Values: " + values + " for " + participantPortNumberLog);
-			System.out.println("Next Round's previous values: " + valuesOfPreviousRound + "\n");
+				ParticipantLogger.getLogger().endRound(round);
 
-			ParticipantLogger.getLogger().endRound(round);
-
+				if(round > (participants.size()+1)) {
+					return outcomeDecision(values);
+				}
 			//if the round takes longer than participantSize*timeout then crash it
 			//remove it from the voting and  
-			if((System.currentTimeMillis() - roundStartTime) > (timeout*peer.getPortsConnectedToPeers().size())) {
+			} catch(SocketTimeoutException e) {
+				System.out.println("Participant took too long to complete round");
 				ParticipantLogger.getLogger().participantCrashed(participantPortNumberLog);
-				System.exit(0); 
-			}
+				return null;
 
-			if(round > (participants.size()+1)) {
-				return outcomeDecision(values);
 			}
-
 		}
 
 		return null;
