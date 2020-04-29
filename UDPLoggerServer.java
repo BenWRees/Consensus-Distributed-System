@@ -7,13 +7,12 @@ import java.net.*;
  * 	- need to add sending the ACK message to the client that sent the message
  */
 
-public class UDPLoggerServer extends Thread {
-	private DatagramSocket socket;
-	
+public class UDPLoggerServer {
+	private DatagramSocket socket = null;
+
 	public UDPLoggerServer(Integer portNumber) {
-		try {
+		try { 
 			socket = new DatagramSocket(portNumber);
-			
 			while(true) {
 				String lineReceived = receiveLine();
 				if(lineReceived != null) {
@@ -31,6 +30,10 @@ public class UDPLoggerServer extends Thread {
 		byte[] buf = new byte[1024];
 		DatagramPacket packetReceive = new DatagramPacket(buf, buf.length);
 		socket.receive(packetReceive);
+
+		if(new String(packetReceive.getData()) != null) {
+			sendAck(packetReceive.getPort());
+		}
 		
 		return new String(packetReceive.getData());
 	}
@@ -42,8 +45,20 @@ public class UDPLoggerServer extends Thread {
 		out.close();
 	}
 	
-	public void sendAck() {
+	public void sendAck(int port) {
+		try {
+			DatagramSocket socket = new DatagramSocket();
+			InetAddress local = InetAddress.getLocalHost();
 		
+			DatagramPacket packetSent = new DatagramPacket("ACK".getBytes(), "ACK".length(),local, port);
+			socket.send(packetSent);
+		} catch(UnknownHostException e) {
+			System.out.println("UnknownHostException thrown in UDPLoggerServer.sendAck due to: ");
+			e.printStackTrace();
+		} catch(IOException e) {
+			System.out.println("IOException thrown in UDPLoggerServer.sendAck due to: ");
+			e.printStackTrace();
+		}
 	}
 	
 	public static void main(String[] args) {
