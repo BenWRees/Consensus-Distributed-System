@@ -13,6 +13,7 @@ public class PeerNode {
 	private ArrayList<Integer> portsConnectedToPeer = new ArrayList<Integer>();
 	private ArrayList<Socket> crashedPeer = new ArrayList<Socket>();
 	private ArrayList<Integer> initPorts;
+	private Integer timeout;
 
 
 	//class represents other sockets trying to reach out and send a message in 
@@ -81,14 +82,16 @@ public class PeerNode {
 						for(int i=1; i < msg.split("\\s").length; i=i+2) {
 							messages.add(msg.split("\\s")[i] + " " + msg.split("\\s")[i+1]);
 						}
-					} else {continue;}
+					} else {
+
+						continue;
+					}
 
 				}
 
 			//due to their being no message etc. - should consider that port crashed 
 			} catch(IOException e) {
 				//stop receiving from this socket
-				//connectionsToOtherPorts.remove(socket);
 				crashedPeer.add(socket);
 				//stop sending to this socket
 				socketToOutput.remove(socket);
@@ -123,8 +126,18 @@ public class PeerNode {
 		return crashedPorts;
 	}
 
+	public void startServersTimeout(ArrayList<Integer> participants) throws SocketTimeoutException {
+		try {
+			serverSock.setSoTimeout(timeout*participants.size());
+		} catch(SocketException e) {
+			System.out.println("Cant get the timeout working");
+			return;
+		}
+	}
+
 	//need to stop hanging if a participant has crashed -
 	public void startListening(Integer port, ArrayList<Integer> otherPorts, Integer timeout) {
+		this.timeout = timeout;
 		try {
 			initPorts = new ArrayList<Integer>(otherPorts);
 			serverSock = new ServerSocket(port);
@@ -165,8 +178,7 @@ public class PeerNode {
 					break;
 				}
 				Socket client = serverSock.accept();
-				client.setSoTimeout(timeout*otherPorts.size());
-				portsConnectedToPeer.add(client.getLocalPort());
+				portsConnectedToPeer.add(client.getPort());
 				new PeerThread(client);
 					
 			}
@@ -175,34 +187,6 @@ public class PeerNode {
 			System.out.println("IOException caught in PeerNode.startListening due to: ");
 			e.printStackTrace();
 		}
-	}
-
-
-
-
-
-	/**
-	 *
-	 * @param portNumber : an Integer representing the port number the serverSocket is waiting on
-	 * @return boolean : true if the server is available and false otherwise
-	 */
-	public boolean serverIsOnline(Integer portNumber) {
-		try {
-			Socket socket = new Socket("localhost", portNumber);
-			return true;
-		} catch(IOException e) {
-			return false;
-		}
-
-	}
-
-
-	//deconstruct the peer node in use
-	public void deconstruct() {
-		serverSock = null;
-		connectionsToOtherPorts.clear();
-		portsConnectedToPeer.clear();
-		socketToOutput.clear();
 	}
 
 
