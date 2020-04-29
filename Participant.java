@@ -195,6 +195,7 @@ public class Participant {
 	}
 	
 	public String votingProtocol() {
+		
 		ParticipantLogger.getLogger().startedListening();
 		peer.startListening(participantPortNumberLog, participants, timeout);
 		
@@ -204,6 +205,10 @@ public class Participant {
 
 		for(Integer port : peer.getConnectionsToOtherPorts()) {
 			ParticipantLogger.getLogger().connectionEstablished(port);
+		}
+
+		for(Integer port : peer.getCrashedPeers(participants)) {
+			ParticipantLogger.getLogger().participantCrashed(port);
 		}
 
 		HashSet<String> values = new HashSet<String>();
@@ -245,10 +250,11 @@ public class Participant {
 			HashSet<String> messagesReceived = new HashSet<String>(peer.multicastReceive(timeout));
 			valuesOfNextRound.addAll(messagesReceived);
 
+			/*
 			if(messagesReceived.isEmpty()) {
 				return outcomeDecision(values);
 			}
-			
+			*/			
 			for(Integer port : peer.getConnectionsToOtherPorts()) {
 				ArrayList<Vote> votesReceived = new ArrayList<Vote>();
 
@@ -381,13 +387,14 @@ public class Participant {
 	/**
 	 * just sends the outcome message to the coordinator
 	 */
-	public void sendOutcome() throws IOException {
+	public void sendOutcome() {
 		participantOutChannel.println(outcome);
 		for(int i=2; i < outcome.split("\\s").length;i++ ) {
 			portsConsidered.add(Integer.parseInt(outcome.split("\\s")[i]));
 		}
 		ParticipantLogger.getLogger().outcomeNotified(voteDecided, portsConsidered);
 		participantOutChannel.flush();
+ 
 		
 	}
 	
