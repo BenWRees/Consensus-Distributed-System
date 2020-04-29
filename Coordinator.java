@@ -72,11 +72,6 @@ public class Coordinator
 		    		return;
 		    	}
 		    	
-				if(!(register(((JoinToken) token).getName(), clientOutput))) {
-					clientSocket.close();
-					return;
-				}
-			
 		    	// If this succeeds, process requests until client exits.
 		    	token = reqTokenizer.getToken(lineRead);
 		    	while (!(token instanceof OutcomeToken)) {
@@ -86,7 +81,11 @@ public class Coordinator
 		    			System.out.println("Found Join message");
 				    	if(token instanceof JoinToken) {
                             clientPort += ((JoinToken) token).getName();
-				    		register(clientPort, clientOutput);
+				    		boolean registerState = register(clientPort, clientOutput);
+                            if(!registerState) {
+                                 clientSocket.close();
+                                 return;
+                            }
 				    		CoordinatorLogger.getLogger().joinReceived(Integer.parseInt(((JoinToken) token).getName()));
 				    	}
 
@@ -115,6 +114,7 @@ public class Coordinator
                 CoordinatorLogger.getLogger().participantCrashed(Integer.parseInt(clientPort));
 		    	unregister(clientPort);
 		    } catch (NullPointerException e) {
+                //throws a number format exception if it's between connection and join message
                 CoordinatorLogger.getLogger().participantCrashed(Integer.parseInt(clientPort));
                 unregister(clientPort);
 		    } catch (Exception e) {
@@ -177,7 +177,7 @@ public class Coordinator
     	Iterator<String> clientPortIt = clientPorts.keySet().iterator();
    		while(clientPortIt.hasNext()) {
    			String clientPort = clientPortIt.next();
-   			detailsMessage = detailsMessage + clientPort + " ";
+   			detailsMessage += clientPort + " ";
    		}		
     	//print to each individual client and remove their name 
     	Iterator<PrintWriter> clientOutputIt = clientPorts.values().iterator();
@@ -270,31 +270,41 @@ public class Coordinator
      * Wait for a connection request. Sets up the server
      */
     public void startListening(Integer coordinatorPortNumber, Integer loggerPortNumber, Integer numberOfClients, String voteOptions, Integer timeOut) {
-    	try {
-    		ServerSocket listener = new ServerSocket(coordinatorPortNumber);
+    	ServerSocket listener = null;
+        try {
+    		listener = new ServerSocket(coordinatorPortNumber);
     		//coordinatorPortNumberLog = coordinatorPortNumber;
     		System.out.println("SERVER ONLINE AT PORT " + listener.getLocalPort());
-    		CoordinatorLogger.initLogger(loggerPortNumber, coordinatorPortNumber, timeOut);
+    	} catch(IOException e) {
+            //IOException thrown due to ServerSocket
+        } 
+        try {
+            CoordinatorLogger.initLogger(loggerPortNumber, coordinatorPortNumber, timeOut);
     		CoordinatorLogger.getLogger().startedListening(listener.getLocalPort());
-    		_MAXCLIENTS = numberOfClients;
+    	} catch(IOException e) {
+            //IOException thrown by logger classes
+        }
+            _MAXCLIENTS = numberOfClients;
     		votingOptions = voteOptions;
+
     		for(int i=0; i<voteOptions.split("\\s").length; i++) {
     			votingOptionsArr.add(voteOptions.split("\\s")[i]);
     		}
 	
     		while (true) {
-    			Socket client = listener.accept();
-    			System.out.println("socket accepted");
-    			System.out.println("sock port number is " + client.getPort());
-                
-    			CoordinatorLogger.getLogger().connectionAccepted(client.getPort());
-
-    			new ServerThread(client, timeOut).start();
+                Socket client = null;
+                try {
+                    client = listener.accept();
+                    System.out.println("socket accepted");
+                    System.out.println("sock port number is " + client.getPort());
+                    CoordinatorLogger.getLogger().connectionAccepted(client.getPort());
+                    new ServerThread(client, timeOut).start();
+                } catch(IOException e) {
+                    //IOException thrown by participant crashing out
+                    CoordinatorLogger.getLogger().participantCrashed(client.getPort());
+                    _numOfClients++;
+                }
     		}
-    	}catch(IOException e) {
-    		System.out.println("IOException thrown in Coordinator.startListening due to: ");
-    		e.printStackTrace();
-    	}
     }
 
     public static void main(String[] args) {
