@@ -7,6 +7,7 @@ public class UDPLoggerClient {
 	private final int loggerServerPort;
 	private final int processId;
 	private final int timeout;
+	private int fails = 0;
 	/**
 	 * @param loggerServerPort the UDP port where the Logger process is listening o
 	 * @param processId the ID of the Participant/Coordinator, i.e. the TCP port where the Participant/Coordinator is listening on
@@ -41,27 +42,33 @@ public class UDPLoggerClient {
 	 */
 	
 	/*
-	 * TO DO:
-	 * 	- need to receive the ack message from the server and then run the error detection
-	 * 	- Send over port number along with message, so that the server can take that and send
-	 * 	  the ack message back
+	 * socket.receive(packetReceived) keeps on hanging 
 	 */
 	public void logToServer(String message) throws IOException {
-		DatagramSocket socket = new DatagramSocket();
-		String messageToSend = getProcessId() + System.currentTimeMillis() + message;
-		InetAddress local = InetAddress.getLocalHost();
-		
-		DatagramPacket packetSent = new DatagramPacket(messageToSend.getBytes(), messageToSend.length(),local, getLoggerServerPort());
-		socket.send(packetSent);
-		/*
-		byte[] ackReceived = "ACK".getBytes();
-		
-		DatagramPacket packetReceived = new DatagramPacket(ackReceived, ackReceived.length);
-		socket.receive(packetReceived);
-		String ackMessage = new String(packetReceived.getData());
-		*/
-		
-		socket.close();
+		if(fails > 3) {
+			return;
+		}
+
+		try {
+			DatagramSocket socket = new DatagramSocket();
+			socket.setSoTimeout(getTimeout());
+
+			String messageToSend = getProcessId() + System.currentTimeMillis() + " " + message;
+			InetAddress local = InetAddress.getLocalHost();
+			
+			DatagramPacket packetSent = new DatagramPacket(messageToSend.getBytes(), messageToSend.length(),local, getLoggerServerPort());
+			socket.send(packetSent);
+			long timeSentStart = System.currentTimeMillis();
+
+			DatagramPacket packetReceived = new DatagramPacket("ACK".getBytes(), "ACK".length());
+			socket.receive(packetReceived);
+			String ackMessage = new String(packetReceived.getData());
+			
+		} catch(SocketTimeoutException e) {
+			fails++;
+			logToServer(message);
+		}
 	}
+
 }
 
