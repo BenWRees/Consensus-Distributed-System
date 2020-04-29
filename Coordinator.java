@@ -42,12 +42,13 @@ public class Coordinator
      */
     private class ServerThread extends Thread {
 		private Socket clientSocket;
-		private String clientPort;
+		private String clientPort = "";
 		private BufferedReader clientInput;
 		private PrintWriter clientOutput;
+        private Integer timeout;
 		
-		ServerThread(Socket client) throws IOException {
-			clientSocket = client;  
+		ServerThread(Socket client, Integer timeout) throws IOException {
+			clientSocket = client;
 		    // Open I/O steams
 		    clientInput = new BufferedReader( new InputStreamReader( client.getInputStream() ) );
 		    clientOutput = new PrintWriter( new OutputStreamWriter( client.getOutputStream() ) );
@@ -84,9 +85,12 @@ public class Coordinator
 		    		//if(token instanceof JoinToken) {
 		    			System.out.println("Found Join message");
 				    	if(token instanceof JoinToken) {
-				    		register(clientPort = ((JoinToken) token).getName(), clientOutput);
+                            clientPort += ((JoinToken) token).getName();
+				    		register(clientPort, clientOutput);
 				    		CoordinatorLogger.getLogger().joinReceived(Integer.parseInt(((JoinToken) token).getName()));
 				    	}
+
+                        System.out.println("NUMBER OF CLIENTS IN THE SERVER " + _numOfClients);
 						
 						
 						if(_numOfClients == _MAXCLIENTS) {
@@ -108,17 +112,13 @@ public class Coordinator
 		    	}
 		    	unregister(clientPort);
 		    } catch (IOException e) {
-		    	System.out.println("Caught I/O Exception  due to: " + e.getMessage());
-		    	e.printStackTrace();
+                CoordinatorLogger.getLogger().participantCrashed(Integer.parseInt(clientPort));
 		    	unregister(clientPort);
 		    } catch (NullPointerException e) {
-		    	System.out.println("Null pointer by: " + clientPort + " due to: " + e.getMessage());
-		    	e.printStackTrace();
+                CoordinatorLogger.getLogger().participantCrashed(Integer.parseInt(clientPort));
                 unregister(clientPort);
 		    } catch (Exception e) {
-				// TODO Auto-generated catch block
-		    	System.out.println("Thrown Exception due to: " + " due to: " + e.getMessage());
-		    	e.printStackTrace();
+                CoordinatorLogger.getLogger().participantCrashed(Integer.parseInt(clientPort));
 		    	unregister(clientPort);
 		    }
 		}
@@ -161,7 +161,7 @@ public class Coordinator
      */
     public void unregister(String name) {
     	clientPorts.remove(name);
-		_numOfClients--;
+		//_numOfClients--;
     }
 
     
@@ -286,9 +286,10 @@ public class Coordinator
     			Socket client = listener.accept();
     			System.out.println("socket accepted");
     			System.out.println("sock port number is " + client.getPort());
+                
     			CoordinatorLogger.getLogger().connectionAccepted(client.getPort());
 
-    			new ServerThread(client).start();
+    			new ServerThread(client, timeOut).start();
     		}
     	}catch(IOException e) {
     		System.out.println("IOException thrown in Coordinator.startListening due to: ");
