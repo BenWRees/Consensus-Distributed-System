@@ -242,7 +242,7 @@ public class Participant {
 				
 				peer.multicastSend(valuesToSend);
 				
-				for(Integer port : peer.getPortsInSend()) {
+				for(Integer port : peer.getConnectionsToOtherPorts()) {
 					ArrayList<Vote> votesSent = new ArrayList<Vote>();
 					for(String valuesToRecord : valuesToSend) {
 						for(int i=0; i<valuesToRecord.split("\\s").length; i=i+2) {
@@ -256,32 +256,61 @@ public class Participant {
 				valuesOfNextRound.clear();
 				valuesOfNextRound.addAll(values);
 
-				HashSet<String> messagesReceived = new HashSet<String>(peer.multicastReceive(timeout));
-				valuesOfNextRound.addAll(messagesReceived);
+				ArrayList<String> messagesReceived = new ArrayList<String>(peer.multicastReceive(timeout));
+				ArrayList<String> messagesReceivedDivided = new ArrayList<String>();
+
+				for(String messageFromPeer : messagesReceived) {
+					for(int i=0; i < messageFromPeer.split("\\s").length; i=i+2) {
+						if(messageFromPeer.split("\\s").length < 2) {
+							break;
+						} else {
+							messagesReceivedDivided.add(messageFromPeer.split("\\s")[i] + " " + messageFromPeer.split("\\s")[i+1]);
+						}
+					}	
+				}
+				valuesOfNextRound.addAll(messagesReceivedDivided);
 
 				/*
 				if(messagesReceived.isEmpty()) {
 					return outcomeDecision(values);
 				}
-				*/			
+				*/	
+				/*	
 				for(Integer port : peer.getConnectionsToOtherPorts()) {
 					ArrayList<Vote> votesReceived = new ArrayList<Vote>();
 
 					for(String valuesToRecord : messagesReceived) {
 						for(int i=0; i<valuesToRecord.split("\\s").length; i=i+2) {
-							votesReceived.add(new Vote(Integer.parseInt(valuesToRecord.split("\\s")[i]), valuesToRecord.split("\\s")[i+1]));
+							if(valuesToRecord.split("\\s").length < 2) {
+								break;
+							} else {
+								votesReceived.add(new Vote(Integer.parseInt(valuesToRecord.split("\\s")[i]), valuesToRecord.split("\\s")[i+1]));
+							}
 						}
 					}
 
 					ParticipantLogger.getLogger().votesReceived(port, votesReceived);
+				}
+				*/
+				for(Integer portNum : peer.getHashMapOfMessages().keySet()) {
+					ArrayList<Vote> votesReceived = new ArrayList<Vote>();
+
+					for(int i=0; i<peer.getHashMapOfMessages().get(portNum).split("\\s").length; i=i+2) {
+						if(peer.getHashMapOfMessages().get(portNum).split("\\s").length < 2) {
+							break;
+						} else {
+							votesReceived.add(new Vote(Integer.parseInt(peer.getHashMapOfMessages().get(portNum).split("\\s")[i]), peer.getHashMapOfMessages().get(portNum).split("\\s")[i+1]));
+						}
+					}
+					ParticipantLogger.getLogger().votesReceived(portNum, votesReceived);
 				}
 
 				for(Integer port : peer.getCrashedPeersInRound()) {
 					ParticipantLogger.getLogger().participantCrashed(port);
 				}
 				
-				System.out.println("MESSAGES RECEIVED FROM OTHER PARTICIPANTS " + messagesReceived.toString() + " for " + participantPortNumberLog);
-				System.out.println("MESSAGES RECEIVED ADDED TO VALUES OF NEXT ROUND: " + valuesOfNextRound.toString());
+				//System.out.println("MESSAGES RECEIVED FROM OTHER PARTICIPANTS " + messagesReceived.toString() + " for " + participantPortNumberLog);
+				//System.out.println("MESSAGES RECEIVED ADDED TO VALUES OF NEXT ROUND: " + valuesOfNextRound.toString());
 
 				//round r values become round r-1
 				valuesOfPreviousRound.clear();
@@ -294,7 +323,11 @@ public class Participant {
 				System.out.println("Next Round's previous values: " + valuesOfPreviousRound + "\n");
 
 				ParticipantLogger.getLogger().endRound(round);
-
+				try {
+					TimeUnit.SECONDS.sleep(3);
+				} catch(InterruptedException e) {
+					System.out.println("Well Fuck");
+				}
 				if(round > (participants.size()+1)) {
 					return outcomeDecision(values);
 				}
