@@ -190,7 +190,7 @@ public class Coordinator
    			
    			detailsMessage = detailsMessage.replaceAll(portToRemove, "");
    			
-   			System.out.println("line sent: DETAILS " + detailsMessage);	
+   			System.out.println("line sent: DETAILS" + detailsMessage);	
    			pw.println("DETAILS " + detailsMessage);
    			CoordinatorLogger.getLogger().detailsSent(Integer.parseInt(clientPortsInverse.get(pw)), remove(Integer.parseInt(clientPortsInverse.get(pw)),portsInDetails));
    			pw.flush();
