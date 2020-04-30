@@ -154,8 +154,8 @@ public class Participant {
 					sendOutcome();
 					return;
 				}
-				
 			}
+			
 			
 			token = reqTokenizer.getToken(participantInChannel.readLine());
 
@@ -274,6 +274,10 @@ public class Participant {
 					}
 
 					ParticipantLogger.getLogger().votesReceived(port, votesReceived);
+				}
+
+				for(Integer port : peer.getCrashedPeersInRound()) {
+					ParticipantLogger.getLogger().participantCrashed(port);
 				}
 				
 				System.out.println("MESSAGES RECEIVED FROM OTHER PARTICIPANTS " + messagesReceived.toString() + " for " + participantPortNumberLog);
