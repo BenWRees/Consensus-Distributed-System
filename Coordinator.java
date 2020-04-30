@@ -106,8 +106,10 @@ public class Coordinator
 		    	//if Outcome is sent to the coordinator
 		    	if(token instanceof OutcomeToken) {		
 		    		outcomeMessage(clientPort, ((OutcomeToken) token).getVoteChoice(), ((OutcomeToken) token).getPortsConsidered());
-		    		
 		    		clientSocket.close();
+
+                    System.exit(0);
+
 		    	}
 		    	unregister(clientPort);
 		    } catch (IOException e) {
