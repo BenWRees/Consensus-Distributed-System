@@ -10,7 +10,7 @@ public class PeerNode {
 	private ServerSocket serverSock = null;
 	private Map<Socket, PrintWriter> socketToOutput = new HashMap<Socket,PrintWriter>(); 
 	private ArrayList<Socket> connectionsToOtherPorts = new ArrayList<Socket>();
-	private ArrayList<Integer> portsConnectedToPeer = new ArrayList<Integer>();
+	private ArrayList<Socket> portsConnectedToPeer = new ArrayList<Socket>();
 	private ArrayList<Socket> crashedPeer = new ArrayList<Socket>();
 	private ArrayList<Integer> initPorts;
 	private Integer timeout;
@@ -44,7 +44,7 @@ public class PeerNode {
 		}
 		//check if the 
 		if(socketToOutput.isEmpty()) {
-			System.out.println("This Participant has been crashed");
+			System.out.println("This Participant has crashed");
 			return;
 		}	
 		Iterator<PrintWriter> outputIt = socketToOutput.values().iterator();
@@ -65,6 +65,7 @@ public class PeerNode {
 		messages.clear();
 		for(Socket socket: connectionsToOtherPorts) {
 			try {
+				socket.setSoTimeout(timeout);
 				if(socket.isConnected() && (!crashedPeer.contains(socket))) {
 					BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 					String msg = in.readLine();
@@ -85,14 +86,25 @@ public class PeerNode {
 						crashedPeer.add(socket);
 						continue;
 					}
-
 				}
-
 			//due to their being no message etc. - should consider that port crashed 
+			}catch(SocketTimeoutException e) {
+				System.out.println("Took too long to receive message");
+				System.out.println(socket.getPort() + " has crashed");
+				portToMessagePortSent.remove(socket.getPort());
+				socketToOutput.remove(socket);
+				crashedPeer.add(socket);
+				continue;
 			} catch(IOException e) {
-
+				continue;
+			}	
+			try {
+				socket.setSoTimeout(0);
+			} catch(SocketException e) {
+				continue;
 			}
 		}
+		
 		//messages.remove(0);
 		return messages;
 	}
@@ -121,8 +133,13 @@ public class PeerNode {
 	}
 
 	public ArrayList<Integer> getPortsConnectedToPeers() {
+		ArrayList<Integer> connectionPorts = new ArrayList<Integer>();
 
-		return portsConnectedToPeer;
+		for(Socket sock : portsConnectedToPeer) {
+			connectionPorts.add(sock.getPort());
+		}
+
+		return connectionPorts;
 	}
 
 	public ArrayList<Integer> getCrashedPeers(ArrayList<Integer> participantPorts) {
@@ -147,14 +164,15 @@ public class PeerNode {
 	}
 
 	//need to stop hanging if a participant has crashed -
-	public void startListening(Integer port, ArrayList<Integer> otherPorts, Integer timeout) {
+	synchronized public void startListening(Integer port, ArrayList<Integer> otherPorts, Integer timeout) {
 		this.timeout = timeout;
 		try {
 			initPorts = new ArrayList<Integer>(otherPorts);
 			serverSock = new ServerSocket(port);
 			System.out.println("PORT SERVERSOCK IS ON: " + serverSock.getLocalPort());
+			
 			try {
-				TimeUnit.MILLISECONDS.sleep(500);
+				TimeUnit.MILLISECONDS.sleep(4*timeout);
 			} catch(InterruptedException e) {
 				System.out.println("Sleeping has been interrupted in PeerNode.startListening");
 			}
@@ -188,7 +206,7 @@ public class PeerNode {
 				}
 				Socket client = serverSock.accept();
 				System.out.println("CLIENT CONNECTED: " + client.getPort());
-				portsConnectedToPeer.add(client.getLocalPort());
+				portsConnectedToPeer.add(client);
 				new PeerThread(client);
 					
 			}
