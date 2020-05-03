@@ -45,7 +45,8 @@ public class UDPLoggerClient {
 	 * socket.receive(packetReceived) keeps on hanging 
 	 */
 	public void logToServer(String message) throws IOException {
-		if(fails > 3) {
+		if(fails >= 3) {
+			//System.out.println("UDPLOGGERSERVER HAS CRASHED");
 			return;
 		}
 
@@ -53,18 +54,21 @@ public class UDPLoggerClient {
 			DatagramSocket socket = new DatagramSocket();
 			socket.setSoTimeout(getTimeout());
 
-			String messageToSend = getProcessId() + System.currentTimeMillis() + " " + message;
+			String messageToSend = getProcessId() + " " + System.currentTimeMillis() + " " + message;
 			InetAddress local = InetAddress.getLocalHost();
 			
 			DatagramPacket packetSent = new DatagramPacket(messageToSend.getBytes(), messageToSend.length(),local, getLoggerServerPort());
 			socket.send(packetSent);
+			//System.out.println("message sent");
 			long timeSentStart = System.currentTimeMillis();
 
 			DatagramPacket packetReceived = new DatagramPacket("ACK".getBytes(), "ACK".length());
 			socket.receive(packetReceived);
 			String ackMessage = new String(packetReceived.getData());
+			//System.out.println("RECEIVED: " + ackMessage);
 			
 		} catch(SocketTimeoutException e) {
+			//System.out.println("Failed to receive ack, number of fails: " + fails);
 			fails++;
 			logToServer(message);
 		}
