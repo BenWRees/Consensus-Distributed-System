@@ -34,7 +34,7 @@ public class UDPLoggerServer {
 		if(new String(packetReceive.getData()) != null) {
 			sendAck(packetReceive.getPort());
 		}
-		
+		//System.out.println("received line: " + new String(packetReceive.getData()));
 		return new String(packetReceive.getData());
 	}
 	
@@ -52,6 +52,7 @@ public class UDPLoggerServer {
 		
 			DatagramPacket packetSent = new DatagramPacket("ACK".getBytes(), "ACK".length(),local, port);
 			socket.send(packetSent);
+			//System.out.println("Ack Sent");
 		} catch(UnknownHostException e) {
 			System.out.println("UnknownHostException thrown in UDPLoggerServer.sendAck due to: ");
 			e.printStackTrace();
