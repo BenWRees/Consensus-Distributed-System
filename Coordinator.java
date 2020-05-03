@@ -1,6 +1,6 @@
 import java.net.*;
 import java.io.*;
-import java.util.ArrayList;
+import java.util.*;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Iterator;
@@ -31,7 +31,7 @@ public class Coordinator
     private Map<String, String> outcomes = new HashMap<String,String>();
     private Map<String, ArrayList<String>> portsConsidered = new HashMap<String, ArrayList<String>>();
     
-    
+    private CoordinatorLoggerThread logger = null;
 
     //private Integer coordinatorPortNumberLog;
     //private Network network;
@@ -40,14 +40,14 @@ public class Coordinator
      * For each client we create a thread that handles
      * all i/o with that client.
      */
-    private class ServerThread extends Thread {
+    private class ClientInterface extends Thread {
 		private Socket clientSocket;
 		private String clientPort = "";
 		private BufferedReader clientInput;
 		private PrintWriter clientOutput;
         private Integer timeout;
 		
-		ServerThread(Socket client, Integer timeout) throws IOException {
+		ClientInterface(Socket client, Integer timeout) throws IOException {
 			clientSocket = client;
 		    // Open I/O steams
 		    clientInput = new BufferedReader( new InputStreamReader( client.getInputStream() ) );
@@ -86,7 +86,8 @@ public class Coordinator
                                  clientSocket.close();
                                  return;
                             }
-				    		CoordinatorLogger.getLogger().joinReceived(Integer.parseInt(((JoinToken) token).getName()));
+				    		
+                            logger.joinReceived(Integer.parseInt(((JoinToken) token).getName()));
 				    	}
 
                         System.out.println("NUMBER OF CLIENTS IN THE SERVER " + _numOfClients);
@@ -108,19 +109,22 @@ public class Coordinator
 		    		outcomeMessage(clientPort, ((OutcomeToken) token).getVoteChoice(), ((OutcomeToken) token).getPortsConsidered());
 		    		clientSocket.close();
 
-                    System.exit(0);
+                    //System.exit(0);
 
 		    	}
 		    	unregister(clientPort);
 		    } catch (IOException e) {
-                CoordinatorLogger.getLogger().participantCrashed(Integer.parseInt(clientPort));
+                
+                logger.participantCrashed(Integer.parseInt(clientPort));
 		    	unregister(clientPort);
 		    } catch (NullPointerException e) {
                 //throws a number format exception if it's between connection and join message
-                CoordinatorLogger.getLogger().participantCrashed(Integer.parseInt(clientPort));
+                
+                logger.participantCrashed(Integer.parseInt(clientPort));
                 unregister(clientPort);
 		    } catch (Exception e) {
-                CoordinatorLogger.getLogger().participantCrashed(Integer.parseInt(clientPort));
+                
+                logger.participantCrashed(Integer.parseInt(clientPort));
 		    	unregister(clientPort);
 		    }
 		}
@@ -194,8 +198,9 @@ public class Coordinator
    			
    			System.out.println("line sent: DETAILS" + detailsMessage);	
    			pw.println("DETAILS " + detailsMessage);
-   			CoordinatorLogger.getLogger().detailsSent(Integer.parseInt(clientPortsInverse.get(pw)), remove(Integer.parseInt(clientPortsInverse.get(pw)),portsInDetails));
-   			pw.flush();
+   			
+   			logger.detailsSent(Integer.parseInt(clientPortsInverse.get(pw)), remove(Integer.parseInt(clientPortsInverse.get(pw)),portsInDetails));
+            pw.flush();
    			
    			detailsMessage = detailsMessage + portToRemove + " ";
 
@@ -224,8 +229,9 @@ public class Coordinator
     		//output stream for particular client
     		PrintWriter pw = clientOutputIt.next();
     		pw.println(voteOptions);
-    		CoordinatorLogger.getLogger().voteOptionsSent(Integer.parseInt(clientPortsInverse.get(pw)), votingOptionsArr);
-    		pw.flush();
+    		
+    		logger.voteOptionsSent(Integer.parseInt(clientPortsInverse.get(pw)), votingOptionsArr);
+            pw.flush();
     	}
     	System.out.println("sent voting options");
     }
@@ -264,14 +270,14 @@ public class Coordinator
 
         System.out.println("OUTCOME " + voteOutcome + ports);
 
-    	CoordinatorLogger.getLogger().outcomeReceived(Integer.parseInt(participant), voteOutcome);
     	
+    	logger.outcomeReceived(Integer.parseInt(participant), voteOutcome);
     }
 
     /**
      * Wait for a connection request. Sets up the server
      */
-    public void startListening(Integer coordinatorPortNumber, Integer loggerPortNumber, Integer numberOfClients, String voteOptions, Integer timeOut) {
+    public void startListening(Integer coordinatorPortNumber, Integer loggerPortNumber, Integer numberOfClients, Integer timeOut, String voteOptions) {
     	ServerSocket listener = null;
         try {
     		listener = new ServerSocket(coordinatorPortNumber);
@@ -280,18 +286,16 @@ public class Coordinator
     	} catch(IOException e) {
             //IOException thrown due to ServerSocket
         } 
-        try {
-            CoordinatorLogger.initLogger(loggerPortNumber, coordinatorPortNumber, timeOut);
-    		CoordinatorLogger.getLogger().startedListening(listener.getLocalPort());
-    	} catch(IOException e) {
-            //IOException thrown by logger classes
-        }
+        
+        logger = new CoordinatorLoggerThread(loggerPortNumber, coordinatorPortNumber, timeOut);
+        logger.start();
+        logger.startedListening(listener.getLocalPort());
             _MAXCLIENTS = numberOfClients;
     		votingOptions = voteOptions;
 
     		for(int i=0; i<voteOptions.split("\\s").length; i++) {
-    			votingOptionsArr.add(voteOptions.split("\\s")[i]);
-    		}
+               votingOptionsArr.add(voteOptions.split("\\s")[i]);
+            }
 	
     		while (true) {
                 Socket client = null;
@@ -299,15 +303,18 @@ public class Coordinator
                     client = listener.accept();
                     System.out.println("socket accepted");
                     System.out.println("sock port number is " + client.getPort());
-                    CoordinatorLogger.getLogger().connectionAccepted(client.getPort());
-                    new ServerThread(client, timeOut).start();
+                  
+                    logger.connectionAccepted(client.getPort());
+                    new ClientInterface(client, timeOut).start();
                 } catch(IOException e) {
                     //IOException thrown by participant crashing out
-                    CoordinatorLogger.getLogger().participantCrashed(client.getPort());
+                   
+                    logger.participantCrashed(client.getPort());
                     _numOfClients++;
                 }
     		}
     }
+
 
     public static void main(String[] args) {
     	if (args.length != 5) {
@@ -317,9 +324,20 @@ public class Coordinator
     	Integer coordinatorPortNumber = Integer.parseInt(args[0]); 
     	Integer loggerPortNumber = Integer.parseInt(args[1]);
     	Integer numberOfClients = Integer.parseInt(args[2]);
-    	String voteOptions = args[3];
-    	Integer timeOut = Integer.parseInt(args[4]);
-    	new Coordinator().startListening(coordinatorPortNumber, loggerPortNumber, numberOfClients, voteOptions, timeOut);
+    	String voteOptions = "";
+    	Integer timeOut = Integer.parseInt(args[3]);
+        
+        HashSet<String> voteOptionsNoDuplicates = new HashSet<String>();
+        //removing duplicate vote options from args[4]
+        for(String vote : args[4].split("\\s")) {
+            voteOptionsNoDuplicates.add(vote);
+        }
+
+        for(String vote : voteOptionsNoDuplicates) {
+            voteOptions += vote + " ";
+        }
+
+    	new Coordinator().startListening(coordinatorPortNumber, loggerPortNumber, numberOfClients, timeOut, voteOptions);
 
     }
 } 
