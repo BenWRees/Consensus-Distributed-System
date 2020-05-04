@@ -12,6 +12,8 @@ public class UDPLoggerServer {
 
 	public UDPLoggerServer(Integer portNumber) {
 		try { 
+			File file = new File("logfile.txt");
+			file.createNewFile();
 			socket = new DatagramSocket(portNumber);
 			while(true) {
 				String lineReceived = receiveLine();
