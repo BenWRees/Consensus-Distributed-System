@@ -213,7 +213,7 @@ public class Participant {
 			logger.connectionAccepted(port);
 		}
 
-		for(Integer port : peer.getConnectionsToOtherPorts()) {
+		for(Integer port : peer.getPortsEstablished()) {
 	
 			logger.connectionEstablished(port);
 		}
@@ -255,7 +255,7 @@ public class Participant {
 			
 			peer.multicastSend(valuesToSend);
 			
-			for(Integer port : peer.getPortsConnectedToPeers()) {
+			for(Integer port : peer.getConnectionsToOtherPorts()) {
 				ArrayList<Vote> votesSent = new ArrayList<Vote>();
 				for(String valuesToRecord : valuesToSend) {
 					for(int i=0; i<valuesToRecord.split("\\s").length; i=i+2) {
@@ -328,7 +328,7 @@ public class Participant {
 			System.out.println("Next Round's previous values: " + valuesOfPreviousRound + "\n");
 			
 			try {
-				TimeUnit.MILLISECONDS.sleep(100);
+				TimeUnit.MILLISECONDS.sleep(300);
 			}catch (InterruptedException e) {}
 
 			//literally added to allow participants to catch up 
@@ -338,7 +338,7 @@ public class Participant {
 			System.out.println("Duration of round: " + interval.toMillis());
 			logger.endRound(round);
 
-			if(interval.toMillis() >= 4*timeout) {
+			if(interval.toMillis() >= participants.size()*timeout) {
 				System.out.println("Round Timed out");
 				logger.participantCrashed(participantPortNumberLog);
 				return "NULL";
