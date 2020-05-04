@@ -5,7 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Iterator;
 import java.util.List;
-
+import java.util.concurrent.TimeUnit;
 
 public class Coordinator
 {
@@ -49,6 +49,7 @@ public class Coordinator
 		
 		ClientInterface(Socket client, Integer timeout) throws IOException {
 			clientSocket = client;
+            this.timeout = timeout;
 		    // Open I/O steams
 		    clientInput = new BufferedReader( new InputStreamReader( client.getInputStream() ) );
 		    clientOutput = new PrintWriter( new OutputStreamWriter( client.getOutputStream() ) );
@@ -241,7 +242,6 @@ public class Coordinator
      * @throws Exception 
      */
 	synchronized public void tellParticipantsToStartVoting() throws Exception {
-    	
     	Iterator<PrintWriter> clientOutputIt = clientPorts.values().iterator();
     	//tell the clients to start the voting rounds
     	while (clientOutputIt.hasNext()) {
