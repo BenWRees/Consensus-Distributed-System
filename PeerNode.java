@@ -52,15 +52,19 @@ public class PeerNode {
 		}	
 		Iterator<PrintWriter> outputIt = socketToOutput.values().iterator();
 		while (outputIt.hasNext()) {
-
+				try {
+					TimeUnit.SECONDS.sleep(4);
+				} catch(InterruptedException e) {}
 	    		PrintWriter pw = (PrintWriter) outputIt.next();
+
 	    		if(pw.checkError()) {
-					System.out.println(outputToSocket.get(pw).getPort() + " has crashed FROM SENDING");
+					System.out.println(outputToSocket.get(pw).getLocalPort() + " has crashed FROM SENDING");
 					portToMessagePortSent.remove(outputToSocket.get(pw).getPort());
 					connectionsToOtherPorts.remove(outputToSocket.get(pw));
 					//crashedPeer.add(outputToSocket.get(pw));
 					continue;
 	    		} else {
+
 		    		pw.println(txt);
 		    		System.out.println("MESSAGES SENT: " + txt);
 		    		pw.flush();
@@ -76,7 +80,7 @@ public class PeerNode {
 	synchronized public ArrayList<String> multicastReceive(Integer timeout) {
 		messages.clear();
 		for(Socket socket: connectionsToOtherPorts) {
-			
+
 			try {
 				if(!crashedPeer.contains(socket)) { //&& socket.isConnected()
 					BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
