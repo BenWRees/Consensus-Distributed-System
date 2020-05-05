@@ -46,8 +46,7 @@ public class UDPLoggerClient {
 	 */
 	public void logToServer(String message) throws IOException {
 		if(fails >= 3) {
-			//System.out.println("UDPLOGGERSERVER HAS CRASHED");
-			return;
+			throw new IOException("IOException due to UDPLoggerServer crashing");
 		}
 
 		try {
