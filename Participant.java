@@ -64,11 +64,11 @@ public class Participant {
 			participantInChannel = new BufferedReader(new InputStreamReader(participantSocket.getInputStream()));
 			
 			
-
-			logger = new ParticipantLoggerThread(loggerPortNumber, participantPortNumber, timeOut);
-			logger.start();
-			
-			peer = new PeerNode();
+			synchronized(this) {
+				logger = new ParticipantLoggerThread(loggerPortNumber, participantPortNumber, timeOut);
+				logger.start();
+				peer = new PeerNode();
+			}
 			
 			//once the client is connected start handshaking
 			if(participantSocket.isConnected() ) {
@@ -265,7 +265,6 @@ public class Participant {
 				if(votesSent.isEmpty()) {
 					continue;
 				} else {
-		
 					logger.votesSent(port, votesSent);
 				}
 			}
@@ -338,7 +337,7 @@ public class Participant {
 			System.out.println("Duration of round: " + interval.toMillis());
 			logger.endRound(round);
 
-			if(interval.toMillis() >= participants.size()*timeout) {
+			if(interval.toMillis() >= 10000000) {
 				System.out.println("Round Timed out");
 				logger.participantCrashed(participantPortNumberLog);
 				return "NULL";
