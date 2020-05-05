@@ -185,3 +185,20 @@ class ExitToken extends Token {
 	}
 }
 
+class BeginRoundToken extends Token {
+
+}
+
+class EndRoundToken extends Token {
+
+}
+
+class VotesReceivedToken extends Token {
+
+}
+
+class VotesSentToken extends Token {
+
+}
+
+
