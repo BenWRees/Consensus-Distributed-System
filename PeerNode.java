@@ -47,20 +47,17 @@ public class PeerNode {
 		}
 		//check if the 
 		if(socketToOutput.isEmpty()) {
-			System.out.println("This Participant has crashed");
+			System.out.println("This Participant has no one to send to");
 			return;
 		}	
 		Iterator<PrintWriter> outputIt = socketToOutput.values().iterator();
 		while (outputIt.hasNext()) {
-				try {
-					TimeUnit.SECONDS.sleep(4);
-				} catch(InterruptedException e) {}
 	    		PrintWriter pw = (PrintWriter) outputIt.next();
 
 	    		if(pw.checkError()) {
 					System.out.println(outputToSocket.get(pw).getLocalPort() + " has crashed FROM SENDING");
-					portToMessagePortSent.remove(outputToSocket.get(pw).getPort());
-					connectionsToOtherPorts.remove(outputToSocket.get(pw));
+					//portToMessagePortSent.remove(outputToSocket.get(pw).getPort());
+					//connectionsToOtherPorts.remove(outputToSocket.get(pw));
 					//crashedPeer.add(outputToSocket.get(pw));
 					continue;
 	    		} else {
@@ -178,12 +175,14 @@ public class PeerNode {
 				crashedPorts.add(participantPort);
 			}
 		}
+
 		return crashedPorts;
 	}
 
 	public ArrayList<Integer> getCrashedPeersInRound() {
 		ArrayList<Integer> getCrashedPeers = new ArrayList<Integer>();
 		connectionsToOtherPorts.removeAll(crashedPeer);
+
 		for(Socket sock : crashedPeer) {
 			getCrashedPeers.add(sock.getPort());
 		}
@@ -198,10 +197,16 @@ public class PeerNode {
 		try {
 			initPorts = new ArrayList<Integer>(otherPorts);
 			serverSock = new ServerSocket(port);
+			ArrayList<Integer> clientPorts = new ArrayList<Integer>(); 
+			try {
+				serverSock.setSoTimeout(100);
+			} catch(SocketException e) {
+				System.out.println("Error with Server Sockets underlying protocol");
+			}
 			System.out.println("PORT SERVERSOCK IS ON: " + serverSock.getLocalPort());
 			
 			try {
-				TimeUnit.MILLISECONDS.sleep(300);
+				TimeUnit.MILLISECONDS.sleep(3000);
 			}catch(InterruptedException e) {}
 
 
@@ -221,69 +226,68 @@ public class PeerNode {
 						flag = false;
 						continue;
 					}
-				}	
+				}
+				try {
+					TimeUnit.SECONDS.sleep(3);
+				} catch(InterruptedException e) {}	
 			}
 
 			//let sockets from other peers connect to this peer - for sending messages 
+			//ADD ERROR DETECTION HERE 
 			boolean flag = true;
-			//if the port takes too long, then skip it 
-			Instant start = Instant.now();
+			//if the port takes too long, then skip it - need to add 
 			while(flag) {
-				Instant currentTime = Instant.now();
 
-				Duration interval = Duration.between(start, currentTime);
+				if(portsConnectedToPeer.size() == initPorts.size()) {
+					flag = false;
+					System.out.println("All peers have connected");
+					break;
+				}
+				Socket client = null;
+				try {	
+					client = serverSock.accept();
+				} catch(SocketTimeoutException e) {
+					System.out.println("No more sockets to connect");
+					flag = false;
 
-				if(interval.toMillis() >= otherPorts.size()*timeout) {
-					flag = false; 
-					System.out.println("Not all participants connected");
+					//remove all ports that crashed from initports 
 					ArrayList<Integer> portsToRemove = new ArrayList<Integer>();
 					for(Integer portToRemove : initPorts) {
-						if(!portsConnectedToPeer.contains(port)) {
+						if(!clientPorts.contains(port)) {
 							portsToRemove.add(portToRemove);
 						}
 					}
+
+					//loop through connectionsToOtherPorts list to remove any crashed peers from vote send
+					ArrayList<Socket> removeFromConnnectionsToOtherPorts = new ArrayList<Socket>();
+					for(Socket sock : connectionsToOtherPorts) {
+						if(!portsConnectedToPeer.contains(sock)) {
+							removeFromConnnectionsToOtherPorts.add(sock);
+						}
+					}
+					connectionsToOtherPorts.removeAll(removeFromConnnectionsToOtherPorts);
 					initPorts.removeAll(portsToRemove);
 					break;
 				}
-				if(portsConnectedToPeer.size() == initPorts.size()) {
-					flag = false;
-					break;
-				}
-				Socket client = serverSock.accept();
-				System.out.println("CLIENT CONNECTED: " + client.getLocalPort());
+
+				System.out.println("CLIENT CONNECTED: " + client.getPort());
 				portsConnectedToPeer.add(client);
+				clientPorts.add(client.getPort());
+
+				if(client.getLocalPort() == serverSock.getLocalPort()) { 
+					portsConnectedToPeer.remove(client);
+					//clientPorts.remove(client.getPort());
+				}
+
 				new PeerThread(client);
 					
 			}
-			//System.out.println("PORTS CONNECTED TO PEER: " + portsConnectedToPeer.toString());
+
 		}catch(IOException e) {
 			System.out.println("IOException caught in PeerNode.startListening due to: ");
 			e.printStackTrace();
 		}
+		//one final test to check if anything has crashed
 	}
-
-	public void cleanUp() {
-		try {
-			//close the serverSocket
-			serverSock.close();
-
-			//close all sockets that the peer receeives messages
-			Iterator<Socket> sockReceiveIt = connectionsToOtherPorts.iterator();
-			while(sockReceiveIt.hasNext()) {
-				sockReceiveIt.next().close();
-			} 
-
-			//close all sockets that the peer sends out messages
-			Iterator<Socket> sockSendIt = socketToOutput.keySet().iterator();
-			while(sockSendIt.hasNext()) {
-				sockSendIt.next().close();
-			}
-
-		} catch(IOException e) {
-			System.out.println("Problem with the cleanup of the Peers Sockets");
-		}
-	}
-
-
 
 }
