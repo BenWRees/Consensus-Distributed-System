@@ -337,7 +337,7 @@ public class Participant {
 			System.out.println("Duration of round: " + interval.toMillis());
 			logger.endRound(round);
 
-			if(interval.toMillis() >= 10000000) {
+			if(interval.toMillis() >= (participants.size()*timeout)) {
 				System.out.println("Round Timed out");
 				logger.participantCrashed(participantPortNumberLog);
 				return "NULL";
