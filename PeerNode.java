@@ -199,7 +199,7 @@ public class PeerNode {
 			serverSock = new ServerSocket(port);
 			ArrayList<Integer> clientPorts = new ArrayList<Integer>(); 
 			try {
-				serverSock.setSoTimeout(100);
+				serverSock.setSoTimeout(timeout);
 			} catch(SocketException e) {
 				System.out.println("Error with Server Sockets underlying protocol");
 			}
@@ -227,9 +227,6 @@ public class PeerNode {
 						continue;
 					}
 				}
-				try {
-					TimeUnit.SECONDS.sleep(3);
-				} catch(InterruptedException e) {}	
 			}
 
 			//let sockets from other peers connect to this peer - for sending messages 
@@ -273,12 +270,11 @@ public class PeerNode {
 				System.out.println("CLIENT CONNECTED: " + client.getPort());
 				portsConnectedToPeer.add(client);
 				clientPorts.add(client.getPort());
-
+				/*
 				if(client.getLocalPort() == serverSock.getLocalPort()) { 
 					portsConnectedToPeer.remove(client);
-					//clientPorts.remove(client.getPort());
 				}
-
+				*/
 				new PeerThread(client);
 					
 			}
