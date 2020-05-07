@@ -325,10 +325,6 @@ public class Participant {
 
 			System.out.println("Next round's Values: " + values + " for " + participantPortNumberLog);
 			System.out.println("Next Round's previous values: " + valuesOfPreviousRound + "\n");
-			
-			try {
-				TimeUnit.MILLISECONDS.sleep(300);
-			}catch (InterruptedException e) {}
 
 			//literally added to allow participants to catch up 
 			Instant end = Instant.now();
@@ -336,6 +332,14 @@ public class Participant {
 			
 			System.out.println("Duration of round: " + interval.toMillis());
 			logger.endRound(round);
+
+			if(values.equals(valuesOfPreviousRound)) {
+				return outcomeDecision(values);
+			}
+
+			try {
+				TimeUnit.MILLISECONDS.sleep(300);
+			}catch (InterruptedException e) {}
 
 			if(interval.toMillis() >= (participants.size()*timeout)) {
 				System.out.println("Round Timed out");
