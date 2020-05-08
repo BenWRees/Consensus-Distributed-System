@@ -17,6 +17,7 @@ public class PeerNode {
 	private ArrayList<Integer> initPorts;
 	private Integer timeout;
 	private Map<Integer,String> portToMessagePortSent = new HashMap<Integer,String>();
+	private ArrayList<PeerThread> listOfPeers = new ArrayList<PeerThread>();
 
 
 	//class represents other sockets trying to reach out and send a message in 
@@ -30,6 +31,20 @@ public class PeerNode {
 			out = new PrintWriter(new OutputStreamWriter(client.getOutputStream()));
 			socketToOutput.put(client,out);
 			outputToSocket.put(out, client);
+		}
+
+		public void startPeer() {
+			socketToOutput.put(client,out);
+			outputToSocket.put(out, client);
+		}
+
+		public void destroyPeer() {
+			socketToOutput.remove(client);
+			outputToSocket.remove(out);
+		}
+
+		public Socket getClient() {
+			return client;
 		}
 	}
 
@@ -55,8 +70,8 @@ public class PeerNode {
 	    		PrintWriter pw = (PrintWriter) outputIt.next();
 
 	    		if(pw.checkError()) {
-					System.out.println(outputToSocket.get(pw).getLocalPort() + " has crashed FROM SENDING");
-					//portToMessagePortSent.remove(outputToSocket.get(pw).getPort());
+					System.out.println(outputToSocket.get(pw).getPort() + " has crashed FROM SENDING");
+					portToMessagePortSent.remove(outputToSocket.get(pw).getPort());
 					//connectionsToOtherPorts.remove(outputToSocket.get(pw));
 					//crashedPeer.add(outputToSocket.get(pw));
 					continue;
@@ -77,17 +92,16 @@ public class PeerNode {
 	synchronized public ArrayList<String> multicastReceive(Integer timeout) {
 		messages.clear();
 		for(Socket socket: connectionsToOtherPorts) {
-
+			System.out.println("trying to receive from: " + socket.getPort());
 			try {
-				if(!crashedPeer.contains(socket)) { //&& socket.isConnected()
+				if(socket.isConnected()) { //&& socket.isConnected()
 					BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 					boolean flag = true;
 					Instant start = Instant.now();
 					while(flag) {
 						Instant currentTime = Instant.now();
-
 						Duration interval = Duration.between(start,currentTime);
-						if(interval.toMillis() >= timeout) {
+						if(interval.toMillis() >= 1000) {
 							flag = false;
 							//System.out.println("Took too long to receive message");
 							System.out.println(socket.getPort() + " has crashed");
@@ -109,6 +123,8 @@ public class PeerNode {
 							messages.add(msg);
 							portToMessagePortSent.put(socket.getPort(), msg);
 							msg = "";
+						} else {
+							continue;
 						}	
 					}
 				
@@ -139,7 +155,6 @@ public class PeerNode {
 
 	public ArrayList<Integer> getConnectionsToOtherPorts() {
 		ArrayList<Integer> connectionPorts = new ArrayList<Integer>();
-
 		for(Socket sock : connectionsToOtherPorts) {
 			connectionPorts.add(sock.getPort());
 		}
@@ -147,12 +162,18 @@ public class PeerNode {
 		return connectionPorts;
 	}
 
+	//need to remove sockets that aren't connected to the ports from the connections to other ports
 	public ArrayList<Integer> getPortsConnectedToPeers() {
 		ArrayList<Integer> connectionPorts = new ArrayList<Integer>();
-
+		//send out an empty message and see which ports send - the ports that send still exist 
+		//System.out.println
 		for(Socket sock : portsConnectedToPeer) {
 			connectionPorts.add(sock.getPort());
 		}
+
+		//remove half of the list
+		Integer halfOfTheList = (int) connectionPorts.size()/2;
+		connectionPorts.subList(0, halfOfTheList).clear();
 
 		return connectionPorts;
 	}
@@ -195,7 +216,7 @@ public class PeerNode {
 	synchronized public void startListening(Integer port, ArrayList<Integer> otherPorts, Integer timeout) {
 		this.timeout = timeout;
 		try {
-			initPorts = new ArrayList<Integer>(otherPorts);
+			initPorts = new ArrayList<Integer>();
 			serverSock = new ServerSocket(port); 
 			try {
 				serverSock.setSoTimeout(timeout);
@@ -218,10 +239,11 @@ public class PeerNode {
 						socket = new Socket("localhost", portToConnectTo);
 						connectionsToOtherPorts.add(socket);
 						System.out.println("PEER CONNECTED SOCKET: " + socket.getPort());
+						initPorts.add(portToConnectTo);
 						flag = false;
 					} catch(IOException e) {
 						System.out.println(portToConnectTo + " HAS CRASHED");
-						initPorts.remove(portToConnectTo);
+						//initPorts.remove(portToConnectTo);
 						flag = false;
 						continue;
 					}
@@ -230,18 +252,31 @@ public class PeerNode {
 					TimeUnit.MILLISECONDS.sleep(3000);
 				}catch(InterruptedException e) {}
 			}
+			
+			//checks again to
+			ArrayList<Integer> portsToRemove = new ArrayList<Integer>();
+			for(Integer ports : initPorts) {
+				if(hasPortCrashed(ports)) {
+					//remove the port from initPorts
+					portsToRemove.add(ports);
+				}
+			}
 
+			initPorts.removeAll(portsToRemove);
+
+			ArrayList<Socket> socketsToRemove = new ArrayList<Socket>();
+			for(Socket sock : connectionsToOtherPorts) {
+				if(!initPorts.contains(sock.getPort())) {
+					socketsToRemove.add(sock);
+				}
+			}
+			connectionsToOtherPorts.removeAll(socketsToRemove);
+	
 			//let sockets from other peers connect to this peer - for sending messages 
 			//ADD ERROR DETECTION HERE 
 			boolean flag = true;
 			//if the port takes too long, then skip it - need to add 
 			while(flag) {
-
-				if(portsConnectedToPeer.size() == initPorts.size()) {
-					flag = false;
-					System.out.println("All peers have connected");
-					break;
-				}
 				Socket client = null;
 				try {	
 					client = serverSock.accept();
@@ -254,6 +289,7 @@ public class PeerNode {
 				System.out.println("CLIENT CONNECTED: " + client.getPort());
 				portsConnectedToPeer.add(client);
 				new PeerThread(client);
+				
 					
 			}
 
@@ -261,24 +297,7 @@ public class PeerNode {
 			System.out.println("IOException caught in PeerNode.startListening due to: ");
 			e.printStackTrace();
 		}
-		//one final test to check if anything has crashed
-		ArrayList<Integer> portsToRemove = new ArrayList<Integer>();
-		for(Integer ports : initPorts) {
-			if(hasPortCrashed(ports)) {
-				//remove the port from initPorts
-				portsToRemove.add(ports);
-			}
-		}
-		initPorts.removeAll(portsToRemove);
-
-		ArrayList<Socket> socketsToRemove = new ArrayList<Socket>();
-		for(Socket sock : connectionsToOtherPorts) {
-			if(hasPortCrashed(sock.getPort())) {
-				socketsToRemove.add(sock);
-			}
-		}
-		connectionsToOtherPorts.removeAll(socketsToRemove);
-
+		
 	}
 
 	//checks if the server socket on a specific port has crashed or not
