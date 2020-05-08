@@ -243,6 +243,7 @@ public class Participant {
 		int round = 1;
 
 	for(round = 1; round <= (participants.size()+2); round++) {
+
 			Instant start = Instant.now();
 			long roundStartTime = System.currentTimeMillis();
 	
@@ -332,13 +333,13 @@ public class Participant {
 			
 			System.out.println("Duration of round: " + interval.toMillis());
 			logger.endRound(round);
-
+			
 			if(values.equals(valuesOfPreviousRound)) {
 				return outcomeDecision(values);
 			}
-
+			
 			try {
-				TimeUnit.MILLISECONDS.sleep(300);
+				TimeUnit.MILLISECONDS.sleep(4000);
 			}catch (InterruptedException e) {}
 
 			if(interval.toMillis() >= (participants.size()*timeout)) {
@@ -356,8 +357,6 @@ public class Participant {
 		return "NULL";
 
 	}
-
-
 	
 
 	public String outcomeDecision(HashSet<String> values) {
