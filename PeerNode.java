@@ -250,11 +250,11 @@ public class PeerNode {
 					}
 				}
 				//Unnecessary wait - remove
-				/*
+				
 				try {
 					TimeUnit.MILLISECONDS.sleep(3000);
 				}catch(InterruptedException e) {}
-				*/
+				
 			}
 			
 			//checks again to
