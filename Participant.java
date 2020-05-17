@@ -339,11 +339,11 @@ public class Participant {
 			}
 			
 			//unnecessary wait - remove
-			/*
+			
 			try {
 				TimeUnit.MILLISECONDS.sleep(4000);
 			}catch (InterruptedException e) {}
-			*/
+			
 
 			if(interval.toMillis() >= (participants.size()*timeout)) {
 				System.out.println("Round Timed out");
