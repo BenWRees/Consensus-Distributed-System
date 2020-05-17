@@ -338,9 +338,12 @@ public class Participant {
 				return outcomeDecision(values);
 			}
 			
+			//unnecessary wait - remove
+			/*
 			try {
 				TimeUnit.MILLISECONDS.sleep(4000);
 			}catch (InterruptedException e) {}
+			*/
 
 			if(interval.toMillis() >= (participants.size()*timeout)) {
 				System.out.println("Round Timed out");
@@ -463,12 +466,13 @@ public class Participant {
 	}
 	
 	
-	public static void main(String[] args) {
+	public static void main(String[] args) throws IOException {
 		//portNumber = Integer.parseInt(args[2]);
 		Integer coordinatorPortNumber = Integer.parseInt(args[0]);
 		Integer loggerPortNumber = Integer.parseInt(args[1]);
 		Integer participantPortNumber = Integer.parseInt(args[2]);
 		Integer timeout = Integer.parseInt(args[3]);
+		//ParticipantLogger.initLogger(loggerPortNumber, participantPortNumber, timeout);
 		Participant currentParticipant = new Participant(coordinatorPortNumber, loggerPortNumber, participantPortNumber, timeout);
 		
 	
