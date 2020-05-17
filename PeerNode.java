@@ -101,7 +101,7 @@ public class PeerNode {
 					while(flag) {
 						Instant currentTime = Instant.now();
 						Duration interval = Duration.between(start,currentTime);
-						if(interval.toMillis() >= 1000) {
+						if(interval.toMillis() >= timeout) {
 							flag = false;
 							//System.out.println("Took too long to receive message");
 							System.out.println(socket.getPort() + " has crashed");
@@ -172,8 +172,9 @@ public class PeerNode {
 		}
 
 		//remove half of the list
-		Integer halfOfTheList = (int) connectionPorts.size()/2;
-		connectionPorts.subList(0, halfOfTheList).clear();
+		double halfOfTheList = connectionPorts.size()/2;
+		Integer halfFloor = (int) Math.floor(halfOfTheList);
+		connectionPorts.subList(0, halfFloor).clear();
 
 		return connectionPorts;
 	}
@@ -248,9 +249,12 @@ public class PeerNode {
 						continue;
 					}
 				}
+				//Unnecessary wait - remove
+				/*
 				try {
 					TimeUnit.MILLISECONDS.sleep(3000);
 				}catch(InterruptedException e) {}
+				*/
 			}
 			
 			//checks again to
