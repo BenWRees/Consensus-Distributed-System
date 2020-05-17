@@ -9,12 +9,14 @@ import java.net.*;
 
 public class UDPLoggerServer {
 	private DatagramSocket socket = null;
+	private PrintStream ps;
 
 	public UDPLoggerServer(Integer portNumber) {
 		try { 
 			File file = new File("logfile.txt");
 			file.createNewFile();
 			socket = new DatagramSocket(portNumber);
+			ps = new PrintStream("logger_server_" + System.currentTimeMillis() + ".log");
 			while(true) {
 				String lineReceived = receiveLine();
 				if(lineReceived != null) {
@@ -44,6 +46,7 @@ public class UDPLoggerServer {
 		PrintWriter out = new PrintWriter(new FileWriter("logfile.txt", true));
 
 		out.println(message);
+		ps.println(message);
 		out.close();
 	}
 	
