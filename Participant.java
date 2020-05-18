@@ -184,6 +184,7 @@ public class Participant {
 		}						
 		
 		System.out.println("We have DETAILS: " + participantPorts);	
+		System.out.println("participants: " + participants.toString());
 		
 		//send message about receiving participants
 	
@@ -206,29 +207,15 @@ public class Participant {
 	
 		logger.voteOptionsReceived(votingOptionsArr);
 	}
-	
-	public void sendPeerInitialMessages(PeerNode peer) {
-		for(Integer port : peer.getPortsConnectedToPeers()) {
-	
-			logger.connectionAccepted(port);
-		}
 
-		for(Integer port : peer.getPortsEstablished()) {
-	
-			logger.connectionEstablished(port);
-		}
-
-		for(Integer port : peer.getCrashedPeers(participants)) {
-	
-			logger.participantCrashed(port);
-		}
-	}
-
-	synchronized public String votingProtocol() {
-
+	synchronized public void networkStartUp() {
 		logger.startedListening();
 		peer.setUpServer(participantPortNumberLog, participants, timeout);
 		
+		try {
+			TimeUnit.MILLISECONDS.sleep(300);
+		}catch(InterruptedException e) {}
+
 		peer.startReachingOut(participantPortNumberLog, participants, timeout);
 		for(Integer port : peer.getPortsEstablished()) {
 			logger.connectionEstablished(port);
@@ -239,10 +226,16 @@ public class Participant {
 	
 			logger.connectionAccepted(port);
 		}
+
 		//sendPeerInitialMessages(peer);
 		for(Integer port : peer.getCrashedPeers(participants)) {
 			logger.participantCrashed(port);
 		}
+	}
+
+	synchronized public String votingProtocol() {
+
+		networkStartUp();
 
 		HashSet<String> values = new HashSet<String>();
 		HashSet<String> valuesOfPreviousRound = new HashSet<String>();
@@ -312,6 +305,19 @@ public class Participant {
 					if(peer.getHashMapOfMessages().get(portNum).split("\\s").length < 2) {
 						break;
 					} else {
+						//check if port number doesn't work
+						ArrayList<Integer> allPorts = new ArrayList<Integer>(participants);
+						allPorts.add(participantPortNumberLog);
+						if(!allPorts.contains(Integer.parseInt(peer.getHashMapOfMessages().get(portNum).split("\\s")[i]))) {
+							System.out.println("Port Number doesn't exist");
+							continue;
+
+						}
+						//check if vote doesn't work
+						if(!votingOptionsArr.contains(peer.getHashMapOfMessages().get(portNum).split("\\s")[i+1])) {
+							System.out.println("Vote doesn't exist");
+							continue;
+						}
 						votesReceived.add(new Vote(Integer.parseInt(peer.getHashMapOfMessages().get(portNum).split("\\s")[i]), peer.getHashMapOfMessages().get(portNum).split("\\s")[i+1]));
 					}
 				}
