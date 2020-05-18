@@ -222,8 +222,8 @@ public class Participant {
 		}
 
 		peer.startListening(participantPortNumberLog, participants, timeout);
+
 		for(Integer port : peer.getPortsConnectedToPeers()) {
-	
 			logger.connectionAccepted(port);
 		}
 
