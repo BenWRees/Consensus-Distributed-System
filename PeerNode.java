@@ -18,6 +18,7 @@ public class PeerNode {
 	private Integer timeout;
 	private Map<Integer,String> portToMessagePortSent = new HashMap<Integer,String>();
 	private ArrayList<PeerThread> listOfPeers = new ArrayList<PeerThread>();
+	private ArrayList<Integer> portsAccepted = new ArrayList<Integer>();
 
 
 
@@ -101,7 +102,7 @@ public class PeerNode {
 					Instant start = Instant.now();
 					while(flag) {
 						Instant currentTime = Instant.now();
-						System.out.println("currentTime: " + currentTime);
+						//System.out.println("currentTime: " + currentTime);
 						Duration interval = Duration.between(start,currentTime);
 						if(interval.toMillis() >= 1000) {
 							flag = false;
@@ -119,12 +120,12 @@ public class PeerNode {
 
 							//need to remove the "Vote" 
 							msg = msg.replace("VOTE ", "");
-
+							
 							if(msg.split("\\s").length % 2 == 1) {
 								System.out.println("Vote message is formatted improperly. Message being discarded");
 								msg = "";
 							}
-
+							
 							if(msg.equals("VOTE")) {
 								msg = "";
 							}
@@ -173,18 +174,21 @@ public class PeerNode {
 
 	//need to remove sockets that aren't connected to the ports from the connections to other ports
 	public ArrayList<Integer> getPortsConnectedToPeers() {
+		System.out.println("Connection Accepted logging starting");
 		ArrayList<Integer> connectionPorts = new ArrayList<Integer>();
 		//send out an empty message and see which ports send - the ports that send still exist 
 		//System.out.println
 		for(Socket sock : portsConnectedToPeer) {
-			connectionPorts.add(sock.getPort());
+			if(portsAccepted.contains(sock.getPort())) {
+				connectionPorts.add(sock.getPort());
+			} else {continue;}
 		}
 
 		//remove half of the list
 		//check if each port in connectionPorts is the local port of connectionToOtherPorts
-		ArrayList<Integer> portsConnected = new ArrayList<Integer>(connectionPorts.subList(0, connectionsToOtherPorts.size()));
-		System.out.println("portsConnected: " + portsConnected.toString());
-		return portsConnected;
+		//ArrayList<Integer> portsConnected = new ArrayList<Integer>(connectionPorts.subList(0, connectionsToOtherPorts.size()));
+		System.out.println("connectionPorts: " + connectionPorts.toString());
+		return connectionPorts;
 	}
 
 	public ArrayList<Integer> getPortsEstablished() {
@@ -283,7 +287,6 @@ public class PeerNode {
 			}
 			connectionsToOtherPorts.removeAll(socketsToRemove);
 			System.out.println("connectionsToOtherPorts: " + connectionsToOtherPorts.toString());
-			
 	}
 
 	synchronized public void startListening(Integer port, ArrayList<Integer> otherPorts, Integer timeout) {
@@ -315,8 +318,131 @@ public class PeerNode {
 			}
 
 			System.out.println("portsConnectedToPeer: " + portsConnectedToPeer.toString());
+			sendConnectionsToOtherPorts();
+			portsAccepted.addAll(receiveConnectionsToOtherPorts());
+
 					
 	}
+
+	//multicast sends to each participant this participants each connectionToOtherPorts socket's localPort
+	/*
+	public void sendConnectionsToOtherPorts() throws IOException {
+		for(Socket sock : connectionsToOtherPorts) {
+			PrintWriter output = new PrintWriter(new OutputStreamWriter(sock.getOutputStream()));
+			String msg = "";
+			for(Socket socket : connectionsToOtherPorts) {
+				msg += socket.getLocalPort() + " ";
+			}
+			output.println(msg);
+		}
+	}
+	*/
+
+	public void sendConnectionsToOtherPorts() {
+		HashSet<String> connectionToOtherPortsLocalPorts = new HashSet<String>();
+		for(Socket sock : connectionsToOtherPorts) {
+			Integer portNum = sock.getLocalPort();
+			connectionToOtherPortsLocalPorts.add(portNum.toString());
+		} 
+
+		multicastSend(connectionToOtherPortsLocalPorts);
+	}
+
+	public ArrayList<Integer> receiveConnectionsToOtherPorts() {
+		ArrayList<String> connectionPorts = new ArrayList<String>();
+		connectionPorts.addAll(multicastReceiveInitial());
+		ArrayList<Integer> connectionPortsInteger = new ArrayList<Integer>();
+		
+		for(String ports : connectionPorts){
+			for(String port : ports.split("\\s")) {
+				connectionPortsInteger.add(Integer.parseInt(port));
+			}
+		}
+		System.out.println("connectionPortsInteger: " + connectionPortsInteger.toString());
+		return connectionPortsInteger;
+	}
+
+
+		synchronized public ArrayList<String> multicastReceiveInitial() {
+		messages.clear();
+		for(Socket socket: connectionsToOtherPorts) {
+			System.out.println("trying to receive from: " + socket.getPort());
+			try {
+				if(socket.isConnected()) { //&& socket.isConnected()
+					BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+					boolean flag = true;
+					Instant start = Instant.now();
+					while(flag) {
+
+						Instant currentTime = Instant.now();
+						//System.out.println("currentTime: " + currentTime);
+						Duration interval = Duration.between(start,currentTime);
+						if(interval.toMillis() >= 1000) {
+							flag = false;
+							//System.out.println("Took too long to receive message");
+							System.out.println(socket.getPort() + " hasn't received");
+							//portToMessagePortSent.remove(socket.getPort());
+							//socketToOutput.remove(socket);
+							//crashedPeer.add(socket);
+							continue;
+						} 
+
+						String msg = in.readLine();
+						if(msg != null) {
+							flag = false;
+							System.out.println("MESSAGE RECEIVED: " + msg);
+
+							//need to remove the "Vote" 
+							msg = msg.replace("VOTE ", "");
+							
+							if(msg.equals("VOTE")) {
+								msg = "";
+							}
+
+							for(String message : msg.split("\\s")){
+								messages.add(message);
+							}
+							msg = "";
+						} else {
+							continue;
+						}
+					}
+				
+				}
+				
+			//due to their being no message etc. - should consider that port crashed 
+			} catch(IOException e) {
+				continue;
+			}	
+		}
+		
+		System.out.println(messages);
+		return messages;
+	}
+	//receives messages from all ports connecting and reads in what there sockets ports are 
+	/*
+	public ArrayList<Integer> receiveConnectiosnToOtherPorts() {
+		ArrayList<Integer> localPorts = new ArrayList<Integer>();
+		for(Socket sock : connectionsToOtherPorts) {
+			BufferedReader input = null;
+			String message = null;
+			try {
+				input = new BufferedReader(new InputStreamReader(sock.getInputStream()));
+				message = input.readLine();	
+			} catch(IOException e) {}
+			if(message != null){
+				for(String port : message.split("\\s")) {
+					localPorts.add(Integer.parseInt(port));
+				}
+			} else {
+				System.out.println("Cannot find message");
+				continue;
+			}
+		}
+		System.out.println("localPorts: " + localPorts.toString());
+		return localPorts;
+	}
+	*/
 
 	//checks if the server socket on a specific port has crashed or not
 	// creates a socket and connects to it
