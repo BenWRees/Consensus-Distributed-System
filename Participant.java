@@ -227,9 +227,22 @@ public class Participant {
 	synchronized public String votingProtocol() {
 
 		logger.startedListening();
-		peer.startListening(participantPortNumberLog, participants, timeout);
+		peer.setUpServer(participantPortNumberLog, participants, timeout);
+		
+		peer.startReachingOut(participantPortNumberLog, participants, timeout);
+		for(Integer port : peer.getPortsEstablished()) {
+			logger.connectionEstablished(port);
+		}
 
-		sendPeerInitialMessages(peer);
+		peer.startListening(participantPortNumberLog, participants, timeout);
+		for(Integer port : peer.getPortsConnectedToPeers()) {
+	
+			logger.connectionAccepted(port);
+		}
+		//sendPeerInitialMessages(peer);
+		for(Integer port : peer.getCrashedPeers(participants)) {
+			logger.participantCrashed(port);
+		}
 
 		HashSet<String> values = new HashSet<String>();
 		HashSet<String> valuesOfPreviousRound = new HashSet<String>();
