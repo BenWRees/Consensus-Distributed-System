@@ -48,7 +48,6 @@ public class UDPLoggerClient {
 		if(fails >= 3) {
 			throw new IOException("IOException due to UDPLoggerServer crashing");
 		}
-
 		try {
 			DatagramSocket socket = new DatagramSocket();
 			socket.setSoTimeout(getTimeout());
