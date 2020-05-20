@@ -44,7 +44,6 @@ public class UDPLoggerServer {
 	
 	public void saveToFile(String message) throws IOException {
 		PrintWriter out = new PrintWriter(new FileWriter("logfile.txt", true));
-
 		out.println(message);
 		ps.println(message);
 		out.close();
