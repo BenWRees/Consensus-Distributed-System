@@ -19,6 +19,7 @@ public class PeerNode {
 	private Map<Integer,String> portToMessagePortSent = new HashMap<Integer,String>();
 	private ArrayList<PeerThread> listOfPeers = new ArrayList<PeerThread>();
 	private ArrayList<Integer> portsAccepted = new ArrayList<Integer>();
+	private HashSet<String> connectionToOtherPortsLocalPorts = new HashSet<String>();
 
 
 
@@ -96,23 +97,12 @@ public class PeerNode {
 		for(Socket socket: connectionsToOtherPorts) {
 			System.out.println("trying to receive from: " + socket.getPort());
 			try {
-				if(socket.isConnected()) { //&& socket.isConnected()
-					BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-					boolean flag = true;
-					Instant start = Instant.now();
-					while(flag) {
-						Instant currentTime = Instant.now();
-						//System.out.println("currentTime: " + currentTime);
-						Duration interval = Duration.between(start,currentTime);
-						if(interval.toMillis() >= 1000) {
-							flag = false;
-							//System.out.println("Took too long to receive message");
-							System.out.println(socket.getPort() + " has crashed");
-							portToMessagePortSent.remove(socket.getPort());
-							socketToOutput.remove(socket);
-							crashedPeer.add(socket);
-							continue;
-						} 
+				BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+				boolean flag = true;
+				Instant start = Instant.now();
+				while(flag) {
+					socket.setSoTimeout(timeout);
+					try {
 						String msg = in.readLine();
 						if(msg != null) {
 							flag = false;
@@ -133,13 +123,20 @@ public class PeerNode {
 							messages.add(msg);
 							portToMessagePortSent.put(socket.getPort(), msg);
 							msg = "";
-						} else {
-							continue;
+							socket.setSoTimeout(0);
 						}
+					} catch(SocketTimeoutException e) {
+						flag = false;
+						//System.out.println("Took too long to receive message");
+						System.out.println(socket.getPort() + " has crashed");
+						portToMessagePortSent.remove(socket.getPort());
+						socketToOutput.remove(socket);
+						crashedPeer.add(socket);
+						socket.setSoTimeout(0);
+						continue;
 					}
-				
 				}
-				
+			
 			//due to their being no message etc. - should consider that port crashed 
 			} catch(IOException e) {
 				continue;
@@ -172,6 +169,26 @@ public class PeerNode {
 		return connectionPorts;
 	}
 
+	public ArrayList<String> getMessages() {
+		return messages;
+	}
+
+	public ArrayList<Integer> getAllClientConnectedPorts() {
+		ArrayList<Integer> connectionPorts = new ArrayList<Integer>();
+		for(Socket sock : portsConnectedToPeer) {
+			if(portsAccepted.contains(sock.getPort())) {
+				connectionPorts.add(sock.getPort());
+			} else {continue;}
+		}
+
+		return connectionPorts;
+	} 
+
+	public ArrayList<String> getConnectionToOtherPortsLocalPorts() {
+		ArrayList<String> connects = new ArrayList<String>();
+		connects.addAll(connectionToOtherPortsLocalPorts);
+		return connects;
+	}
 	//need to remove sockets that aren't connected to the ports from the connections to other ports
 	public ArrayList<Integer> getPortsConnectedToPeers() {
 		ArrayList<Integer> connectionPorts = new ArrayList<Integer>();
@@ -205,6 +222,17 @@ public class PeerNode {
 				crashedPorts.add(participantPort);
 			}
 		}
+
+		//remove all crashed participants from connectionsToOtherPorts
+		
+		ArrayList<Socket> socketsToRemove = new ArrayList<Socket>();
+		for(Socket sock : connectionsToOtherPorts) {
+			if(crashedPorts.contains(sock.getPort())) {
+				socketsToRemove.add(sock);
+			}
+		}
+		connectionsToOtherPorts.removeAll(socketsToRemove);
+		
 
 		return crashedPorts;
 	}
@@ -258,10 +286,11 @@ public class PeerNode {
 					}
 				}
 				//Unnecessary wait - remove
+				/*
 				try {
 					TimeUnit.MILLISECONDS.sleep(3000);
 				}catch(InterruptedException e) {}
-				
+				*/
 			}
 
 			ArrayList<Integer> portsToRemove = new ArrayList<Integer>();
@@ -321,8 +350,6 @@ public class PeerNode {
 	}
 
 	public void sendConnectionsToOtherPorts(Integer port) {
-		HashSet<String> connectionToOtherPortsLocalPorts = new HashSet<String>();
-		
 		for(Socket sock : connectionsToOtherPorts) {
 			Integer portNum = sock.getLocalPort();
 			Integer partPortNum = sock.getPort();
@@ -348,7 +375,9 @@ public class PeerNode {
 		ArrayList<Integer> portsStillWorking = new ArrayList<Integer>();
 		for(String ports : connectionPorts) {
 			for(String port : ports.split("\\s")){
-				portsStillWorking.add(Integer.parseInt(port.split("=")[0]));
+				if(!portsStillWorking.contains(Integer.parseInt(port.split("=")[0]))) {
+					portsStillWorking.add(Integer.parseInt(port.split("=")[0]));
+				}
 			}
 		}
 
