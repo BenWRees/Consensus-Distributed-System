@@ -63,12 +63,9 @@ public class Participant {
 			participantOutChannel = new PrintWriter(participantSocket.getOutputStream(), true);
 			participantInChannel = new BufferedReader(new InputStreamReader(participantSocket.getInputStream()));
 			
-			
-			synchronized(this) {
-				logger = new ParticipantLoggerThread(loggerPortNumber, participantPortNumber, timeOut);
-				logger.start();
-				peer = new PeerNode();
-			}
+			logger = new ParticipantLoggerThread(loggerPortNumber, participantPortNumber, timeOut);
+			logger.start();
+			peer = new PeerNode();
 			
 			//once the client is connected start handshaking
 			if(participantSocket.isConnected() ) {
@@ -125,9 +122,8 @@ public class Participant {
 		//sending the JOIN MESSAGE
 		System.out.println("Participant Socket Connected"); //this is fine
 		participantOutChannel.println("JOIN " + participantSocket.getLocalPort());
-		System.out.println("Sent JOIN message: " + "JOIN " + participantSocket.getLocalPort());
-	
 		logger.joinSent(participantSocket.getLocalPort());
+		System.out.println("Sent JOIN message: " + "JOIN " + participantSocket.getLocalPort());
 		//tell logger we've sent the join message
 		
 		Token token = null;
@@ -154,6 +150,7 @@ public class Participant {
 			
 			if(token instanceof VotingRoundsToken) {
 				System.out.println("Begin Voting Rounds");
+				logger.messageReceived(participantSocket.getPort(), "Voting rounds Begun");
 				outcome += votingProtocol();
 				System.out.println(outcome);
 				if(outcome.equals("NULL")) {
@@ -209,11 +206,14 @@ public class Participant {
 	}
 
 	synchronized public void networkStartUp() {
+		ArrayList<Integer> participantPortNumbers = new ArrayList<Integer>(participants);
+		ArrayList<Integer> participantPortNumbersToRemove = new ArrayList<Integer>();
+
 		logger.startedListening();
 		peer.setUpServer(participantPortNumberLog, participants, timeout);
 		
 		try {
-			TimeUnit.MILLISECONDS.sleep(300);
+			TimeUnit.MILLISECONDS.sleep(100);
 		}catch(InterruptedException e) {}
 
 		peer.startReachingOut(participantPortNumberLog, participants, timeout);
@@ -221,21 +221,58 @@ public class Participant {
 			logger.connectionEstablished(port);
 		}
 
-		peer.startListening(participantPortNumberLog, participants, timeout);
+		for(Integer port : peer.getCrashedPeers(participantPortNumbers)) {
+			participantPortNumbersToRemove.add(port);
+			logger.participantCrashed(port);
+		}
 
+		participantPortNumbers.removeAll(participantPortNumbersToRemove);
+
+		peer.startListening(participantPortNumberLog, participants, timeout);
 		for(Integer port : peer.getPortsConnectedToPeers()) {
 			logger.connectionAccepted(port);
 		}
 
-		//sendPeerInitialMessages(peer);
-		for(Integer port : peer.getCrashedPeers(participants)) {
+		for(Integer port : peer.getCrashedPeers(participantPortNumbers)) {
 			logger.participantCrashed(port);
 		}
+
+		String logMessages = "";
+		for(String logMessage : peer.getConnectionToOtherPortsLocalPorts()) {
+			logMessages += logMessage.split("=")[1] + " ";
+		}
+		logMessages.trim();
+
+		//Logging messages for the 
+		for(Integer ports : peer.getAllClientConnectedPorts()) {
+			logger.messageSent(ports, logMessages);
+		}
+
+		Map<Integer, String> socketsToPorts = new HashMap<Integer, String>();
+		for(String messages : peer.getMessages()) {
+			if(socketsToPorts.containsKey(Integer.parseInt(messages.split("=")[0]))) {
+				String message = socketsToPorts.get(Integer.parseInt(messages.split("=")[0])) + " " + messages.split("=")[1];
+				socketsToPorts.put(Integer.parseInt(messages.split("=")[0]), message);
+			} else {
+				socketsToPorts.put(Integer.parseInt(messages.split("=")[0]), messages.split("=")[1]);
+			}
+		}
+
+		Iterator<String> messagesIt = socketsToPorts.values().iterator();
+		Iterator<Integer> portsIt = socketsToPorts.keySet().iterator();
+		while(messagesIt.hasNext() && portsIt.hasNext()) {
+			logger.messageReceived(portsIt.next(), messagesIt.next());
+		}
+
+
 	}
 
 	synchronized public String votingProtocol() {
 
 		networkStartUp();
+		try {
+			TimeUnit.MILLISECONDS.sleep(300);
+		}catch(InterruptedException e) {}
 
 		HashSet<String> values = new HashSet<String>();
 		HashSet<String> valuesOfPreviousRound = new HashSet<String>();
@@ -358,10 +395,8 @@ public class Participant {
 				return outcomeDecision(values);
 			}
 			
-			//unnecessary wait - remove
-			
 			try {
-				TimeUnit.MILLISECONDS.sleep(4000);
+				TimeUnit.MILLISECONDS.sleep(100);
 			}catch (InterruptedException e) {}
 			
 
