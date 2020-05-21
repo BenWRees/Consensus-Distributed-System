@@ -18,6 +18,7 @@ public class Participant {
 
 	private String participantPorts = "";
 	private ArrayList<Integer> participants = new ArrayList<Integer>();
+	private ArrayList<Integer> participantsNotCrashed = new ArrayList<Integer>();
 	
 	private String votingOptions = "";
 	private ArrayList<String> votingOptionsArr = new ArrayList<String>();
@@ -69,6 +70,8 @@ public class Participant {
 			
 			//once the client is connected start handshaking
 			if(participantSocket.isConnected() ) {
+				logger.messageSent(coordinatorPortNumberLog, "JOIN " + participantSocket.getLocalPort());
+				logger.joinSent(participantSocket.getLocalPort());
 				//stringRead = participantInChannel.readLine();
 				handshakingprotocols();
 			}		
@@ -122,7 +125,6 @@ public class Participant {
 		//sending the JOIN MESSAGE
 		System.out.println("Participant Socket Connected"); //this is fine
 		participantOutChannel.println("JOIN " + participantSocket.getLocalPort());
-		logger.joinSent(participantSocket.getLocalPort());
 		System.out.println("Sent JOIN message: " + "JOIN " + participantSocket.getLocalPort());
 		//tell logger we've sent the join message
 		
@@ -145,9 +147,19 @@ public class Participant {
 			if(token instanceof VoteOptionsToken) {
 				System.out.println("Vote Options exchange");
 				receiveVoteMessage((((VoteOptionsToken) token).getOptions().toString()));
+				System.out.println("Begin Voting Rounds");
+				//logger.messageReceived(participantSocket.getPort(), "Voting rounds Begun");
+				outcome += votingProtocol();
+				System.out.println(outcome);
+				if(outcome.equals("NULL")) {
+					return;
+				} else { 
+					sendOutcome();
+					return;
+				}
 				
 			}
-			
+			/*
 			if(token instanceof VotingRoundsToken) {
 				System.out.println("Begin Voting Rounds");
 				logger.messageReceived(participantSocket.getPort(), "Voting rounds Begun");
@@ -160,7 +172,7 @@ public class Participant {
 					return;
 				}
 			}
-			
+			*/			
 			
 			token = reqTokenizer.getToken(participantInChannel.readLine());
 
@@ -184,7 +196,7 @@ public class Participant {
 		System.out.println("participants: " + participants.toString());
 		
 		//send message about receiving participants
-	
+		logger.messageReceived(coordinatorPortNumberLog, "DETAILS" + details);
 		logger.detailsReceived(participants);
 	}
 	
@@ -201,19 +213,21 @@ public class Participant {
 			
 		System.out.println("We have VOTING_OPTIONS:" + votingOptions + " for " + getPortNumber());
 		//send message about receiving votes
-	
+
+		logger.messageReceived(coordinatorPortNumberLog, votes);
 		logger.voteOptionsReceived(votingOptionsArr);
 	}
 
 	synchronized public void networkStartUp() {
 		ArrayList<Integer> participantPortNumbers = new ArrayList<Integer>(participants);
 		ArrayList<Integer> participantPortNumbersToRemove = new ArrayList<Integer>();
+		//participantsNotCrashed.addAll(participants);
 
 		logger.startedListening();
 		peer.setUpServer(participantPortNumberLog, participants, timeout);
 		
 		try {
-			TimeUnit.MILLISECONDS.sleep(100);
+			TimeUnit.MILLISECONDS.sleep(100*participants.size());
 		}catch(InterruptedException e) {}
 
 		peer.startReachingOut(participantPortNumberLog, participants, timeout);
@@ -224,6 +238,7 @@ public class Participant {
 		for(Integer port : peer.getCrashedPeers(participantPortNumbers)) {
 			participantPortNumbersToRemove.add(port);
 			logger.participantCrashed(port);
+			System.out.println("Crashed Ports: " + port);
 		}
 
 		participantPortNumbers.removeAll(participantPortNumbersToRemove);
@@ -237,11 +252,15 @@ public class Participant {
 			logger.participantCrashed(port);
 		}
 
+		try {
+			TimeUnit.MILLISECONDS.sleep(100*participants.size());
+		}catch(InterruptedException e) {}
+
 		String logMessages = "";
 		for(String logMessage : peer.getConnectionToOtherPortsLocalPorts()) {
 			logMessages += logMessage.split("=")[1] + " ";
 		}
-		logMessages.trim();
+		logMessages = logMessages.trim();
 
 		//Logging messages for the 
 		for(Integer ports : peer.getAllClientConnectedPorts()) {
@@ -264,14 +283,26 @@ public class Participant {
 			logger.messageReceived(portsIt.next(), messagesIt.next());
 		}
 
+		try {
+			TimeUnit.MILLISECONDS.sleep(100*participants.size());
+		}catch(InterruptedException e) {}
+
 
 	}
+
+	/*
+	public ArrayList<Integer> checkingWhatRoundsHaveCrashed() {
+		ArrayList<String> endRoundMessages = new ArrayList<String>(peer.multicastReceive(timeout));
+		ArrayList<Integer> portsAlive = new ArrayList<Integer>();
+		return portsAlive;
+	}
+	*/
 
 	synchronized public String votingProtocol() {
 
 		networkStartUp();
 		try {
-			TimeUnit.MILLISECONDS.sleep(300);
+			TimeUnit.MILLISECONDS.sleep(100*participants.size());
 		}catch(InterruptedException e) {}
 
 		HashSet<String> values = new HashSet<String>();
@@ -285,8 +316,38 @@ public class Participant {
 
 		int round = 1;
 
+		for(round = 1; round <= (participants.size()+2); round++) {
+			
+			/*
+			 * for rounds greater than 1:
+			 * -- read the messages, if a port that is expected there isn't wait and keep on reading
+			 * -- if the port still hasn't sent a message by timeout milliseconds, then consider that port crashed
+			 */
+			/*
+			if(round > 1) { 
+				ArrayList<Integer> portsAlive = new ArrayList<Integer>(); 
+				Instant start = Instant.now();
+				while(participants != portsAlive) {
+					Instant currentTime = Instant.now();
+					Duration interval = Duration.between(start, currentTime);
 
-	for(round = 1; round <= (participants.size()+2); round++) {
+					if(interval.toMillis() >= timeout) {
+						ArrayList<Integer> portCrashed = new ArrayList<Integer>();
+						//any ports not in ports Alive should be considered crashed 
+						for(Integer ports : participantsNotCrashed) {
+							if(!portsAlive.contains(ports)) {
+								portCrashed.add(ports);
+								logger.participantCrashed(ports);
+							}
+						}
+						participantsNotCrashed.removeAll(portCrashed);
+						break;
+					}
+					portsAlive.addAll(checkingWhatRoundsHaveCrashed());
+
+				}
+			}
+			*/
 
 			Instant start = Instant.now();
 			long roundStartTime = System.currentTimeMillis();
@@ -302,6 +363,13 @@ public class Participant {
 			
 			for(Integer port : peer.getConnectionsToOtherPorts()) {
 				ArrayList<Vote> votesSent = new ArrayList<Vote>();
+				String message = "";
+				for(String vote : valuesToSend) {
+					message += vote + " ";
+				}
+				message = message.trim();
+				logger.messageSent(port, message);
+
 				for(String valuesToRecord : valuesToSend) {
 					for(int i=0; i<valuesToRecord.split("\\s").length; i=i+2) {
 						votesSent.add(new Vote(Integer.parseInt(valuesToRecord.split("\\s")[i]), valuesToRecord.split("\\s")[i+1]));
@@ -313,6 +381,10 @@ public class Participant {
 					logger.votesSent(port, votesSent);
 				}
 			}
+
+			try {
+				TimeUnit.MILLISECONDS.sleep(100*participants.size());
+			}catch(InterruptedException e) {}
 			
 			valuesOfNextRound.clear();
 			valuesOfNextRound.addAll(values);
@@ -331,14 +403,13 @@ public class Participant {
 			}
 			valuesOfNextRound.addAll(messagesReceivedDivided);
 
-			/*
 			if(messagesReceived.isEmpty()) {
 				return outcomeDecision(values);
 			}
-			*/	
+			
 			for(Integer portNum : peer.getHashMapOfMessages().keySet()) {
 				ArrayList<Vote> votesReceived = new ArrayList<Vote>();
-
+				logger.messageReceived(portNum, peer.getHashMapOfMessages().get(portNum));
 				for(int i=0; i<peer.getHashMapOfMessages().get(portNum).split("\\s").length; i=i+2) {
 					if(peer.getHashMapOfMessages().get(portNum).split("\\s").length < 2) {
 						break;
@@ -368,8 +439,12 @@ public class Participant {
 				}
 			}
 
+			try {
+				TimeUnit.MILLISECONDS.sleep(100*participants.size());
+			}catch(InterruptedException e) {}
+
 			for(Integer port : peer.getCrashedPeersInRound()) {
-			
+				participantsNotCrashed.remove(port);
 				logger.participantCrashed(port);
 			}
 
@@ -396,12 +471,13 @@ public class Participant {
 			}
 			
 			try {
-				TimeUnit.MILLISECONDS.sleep(100);
+				TimeUnit.MILLISECONDS.sleep(100*participants.size());
 			}catch (InterruptedException e) {}
 			
 
-			if(interval.toMillis() >= (participants.size()*timeout)) {
+			if(interval.toMillis() >= ((participants.size()*timeout) + (300*participants.size()))) {
 				System.out.println("Round Timed out");
+				participantsNotCrashed.remove(participantPortNumberLog);
 				logger.participantCrashed(participantPortNumberLog);
 				return "NULL";
 			}
@@ -409,6 +485,12 @@ public class Participant {
 			if(round > (participants.size()+1)) {
 				return outcomeDecision(values);
 			}
+
+			/*
+			HashSet<String> completedRound = new HashSet<String>();
+			completedRound.add(participantPortNumberLog.toString());
+			peer.multicastSend(completedRound);
+			*/
 
 		}
 
@@ -513,11 +595,10 @@ public class Participant {
 		for(int i=2; i < outcome.split("\\s").length;i++ ) {
 			portsConsidered.add(Integer.parseInt(outcome.split("\\s")[i]));
 		}
-		
+		logger.messageSent(coordinatorPortNumberLog, outcome);
 		logger.outcomeNotified(voteDecided, portsConsidered);
 		participantOutChannel.flush();
- 
-		
+
 	}
 	
 	
@@ -530,7 +611,6 @@ public class Participant {
 		//ParticipantLogger.initLogger(loggerPortNumber, participantPortNumber, timeout);
 		Participant currentParticipant = new Participant(coordinatorPortNumber, loggerPortNumber, participantPortNumber, timeout);
 		
-	
 	}
 	
 	
