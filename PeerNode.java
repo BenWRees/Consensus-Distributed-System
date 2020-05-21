@@ -70,20 +70,20 @@ public class PeerNode {
 		}	
 		Iterator<PrintWriter> outputIt = socketToOutput.values().iterator();
 		while (outputIt.hasNext()) {
-	    		PrintWriter pw = (PrintWriter) outputIt.next();
+    		PrintWriter pw = (PrintWriter) outputIt.next();
 
-	    		if(pw.checkError()) {
-					System.out.println(outputToSocket.get(pw).getPort() + " has crashed FROM SENDING");
-					portToMessagePortSent.remove(outputToSocket.get(pw).getPort());
-					//connectionsToOtherPorts.remove(outputToSocket.get(pw));
-					//crashedPeer.add(outputToSocket.get(pw));
-					continue;
-	    		} else {
+    		if(pw.checkError()) {
+				System.out.println(outputToSocket.get(pw).getPort() + " has crashed FROM SENDING");
+				portToMessagePortSent.remove(outputToSocket.get(pw).getPort());
+				//connectionsToOtherPorts.remove(outputToSocket.get(pw));
+				//crashedPeer.add(outputToSocket.get(pw));
+				continue;
+    		} else {
 
-		    		pw.println(txt);
-		    		System.out.println("MESSAGES SENT: " + txt + " to " + outputToSocket.get(pw).getPort());
-		    		pw.flush();
-		    	}
+	    		pw.println(txt);
+	    		System.out.println("MESSAGES SENT: " + txt + " to " + outputToSocket.get(pw).getPort());
+	    		pw.flush();
+	    	}
 		}
 	}
 
@@ -98,43 +98,48 @@ public class PeerNode {
 			System.out.println("trying to receive from: " + socket.getPort());
 			try {
 				BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-				boolean flag = true;
 				Instant start = Instant.now();
-				while(flag) {
-					socket.setSoTimeout(timeout);
-					try {
-						String msg = in.readLine();
-						if(msg != null) {
-							flag = false;
-							System.out.println("MESSAGE RECEIVED: " + msg);
-
-							//need to remove the "Vote" 
-							msg = msg.replace("VOTE ", "");
-							
-							if(msg.split("\\s").length % 2 == 1) {
-								System.out.println("Vote message is formatted improperly. Message being discarded");
-								msg = "";
-							}
-							
-							if(msg.equals("VOTE")) {
-								msg = "";
-							}
-
-							messages.add(msg);
-							portToMessagePortSent.put(socket.getPort(), msg);
-							msg = "";
-							socket.setSoTimeout(0);
-						}
-					} catch(SocketTimeoutException e) {
+				//constantly check if the input is ready, if it's
+				boolean boolFlag = true;
+				boolean flag = true;
+				while(!in.ready() && boolFlag) {
+					Instant currentTime = Instant.now();
+					Duration interval = Duration.between(start,currentTime);
+					if(interval.toMillis() >= timeout) {
+						boolFlag = false;
 						flag = false;
 						//System.out.println("Took too long to receive message");
-						System.out.println(socket.getPort() + " has crashed");
+						System.out.println(socket.getPort() + " took too long and has crashed");
 						portToMessagePortSent.remove(socket.getPort());
 						socketToOutput.remove(socket);
 						crashedPeer.add(socket);
-						socket.setSoTimeout(0);
 						continue;
 					}
+
+				}
+				while(flag) {
+					String msg = null;
+					msg = in.readLine();
+					if(msg != null) {
+						flag = false;
+						System.out.println("MESSAGE RECEIVED: " + msg);
+
+						//need to remove the "Vote" 
+						msg = msg.replace("VOTE ", "");
+						
+						if(msg.split("\\s").length % 2 == 1) {
+							System.out.println("Vote message is formatted improperly. Message being discarded");
+							msg = "";
+						}
+						
+						if(msg.equals("VOTE")) {
+							msg = "";
+						}
+
+						messages.add(msg);
+						portToMessagePortSent.put(socket.getPort(), msg);
+						msg = "";
+					}  
 				}
 			
 			//due to their being no message etc. - should consider that port crashed 
