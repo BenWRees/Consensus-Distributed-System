@@ -14,9 +14,9 @@ public class UDPLoggerServer {
 	public UDPLoggerServer(Integer portNumber) {
 		try { 
 			File file = new File("logfile.txt");
+			ps = new PrintStream("logger_server_" + System.currentTimeMillis() + ".log");
 			file.createNewFile();
 			socket = new DatagramSocket(portNumber);
-			ps = new PrintStream("logger_server_" + System.currentTimeMillis() + ".log");
 			while(true) {
 				String lineReceived = receiveLine();
 				if(lineReceived != null) {
@@ -33,8 +33,9 @@ public class UDPLoggerServer {
 	public String receiveLine() throws IOException {
 		byte[] buf = new byte[1024];
 		DatagramPacket packetReceive = new DatagramPacket(buf, buf.length);
-		socket.receive(packetReceive);
-
+		synchronized(packetReceive) {
+			socket.receive(packetReceive);
+		}
 		if(new String(packetReceive.getData()) != null) {
 			sendAck(packetReceive.getPort());
 		}
@@ -55,7 +56,9 @@ public class UDPLoggerServer {
 			InetAddress local = InetAddress.getLocalHost();
 		
 			DatagramPacket packetSent = new DatagramPacket("ACK".getBytes(), "ACK".length(),local, port);
-			socket.send(packetSent);
+			synchronized(packetSent) {
+				socket.send(packetSent);
+			}
 			//System.out.println("Ack Sent");
 		} catch(UnknownHostException e) {
 			System.out.println("UnknownHostException thrown in UDPLoggerServer.sendAck due to: ");
