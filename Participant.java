@@ -45,6 +45,8 @@ public class Participant {
 
 	private ParticipantLoggerThread logger = null;
 
+	private ArrayList<Integer> randomLocalPorts = new ArrayList<Integer>();
+
 	
 	/*
 	 * establishes a TCP connection with Coordinator object and sends a byte stream to 
@@ -52,6 +54,9 @@ public class Participant {
 	 * need to get it to wait until the coordinator socket exists befoer 
 	 */
 	Participant(Integer coordinatorPortNumber, Integer loggerPortNumber, Integer participantPortNumber, Integer timeOut) {
+		logger = new ParticipantLoggerThread(loggerPortNumber, participantPortNumber, timeOut);
+		logger.start();
+		peer = new PeerNode();
 		try {
 			participantPortNumberLog = participantPortNumber;
 			coordinatorPortNumberLog = coordinatorPortNumber;
@@ -64,12 +69,8 @@ public class Participant {
 			participantOutChannel = new PrintWriter(participantSocket.getOutputStream(), true);
 			participantInChannel = new BufferedReader(new InputStreamReader(participantSocket.getInputStream()));
 			
-			logger = new ParticipantLoggerThread(loggerPortNumber, participantPortNumber, timeOut);
-			logger.start();
-			peer = new PeerNode();
-			
 			//once the client is connected start handshaking
-			if(participantSocket.isConnected() ) {
+			if(participantSocket.isConnected()) {
 				logger.messageSent(coordinatorPortNumberLog, "JOIN " + participantSocket.getLocalPort());
 				logger.joinSent(participantSocket.getLocalPort());
 				//stringRead = participantInChannel.readLine();
@@ -158,22 +159,8 @@ public class Participant {
 					return;
 				}
 				
-			}
-			/*
-			if(token instanceof VotingRoundsToken) {
-				System.out.println("Begin Voting Rounds");
-				logger.messageReceived(participantSocket.getPort(), "Voting rounds Begun");
-				outcome += votingProtocol();
-				System.out.println(outcome);
-				if(outcome.equals("NULL")) {
-					return;
-				} else { 
-					sendOutcome();
-					return;
-				}
-			}
-			*/			
-			
+			}		
+
 			token = reqTokenizer.getToken(participantInChannel.readLine());
 
 		}
@@ -217,6 +204,7 @@ public class Participant {
 		logger.messageReceived(coordinatorPortNumberLog, votes);
 		logger.voteOptionsReceived(votingOptionsArr);
 	}
+
 
 	synchronized public void networkStartUp() {
 		ArrayList<Integer> participantPortNumbers = new ArrayList<Integer>(participants);
@@ -290,14 +278,6 @@ public class Participant {
 
 	}
 
-	/*
-	public ArrayList<Integer> checkingWhatRoundsHaveCrashed() {
-		ArrayList<String> endRoundMessages = new ArrayList<String>(peer.multicastReceive(timeout));
-		ArrayList<Integer> portsAlive = new ArrayList<Integer>();
-		return portsAlive;
-	}
-	*/
-
 	synchronized public String votingProtocol() {
 
 		networkStartUp();
@@ -314,40 +294,8 @@ public class Participant {
 
 		System.out.println("initial votes in values: " + values);
 
-		int round = 1;
 
-		for(round = 1; round <= (participants.size()+2); round++) {
-			
-			/*
-			 * for rounds greater than 1:
-			 * -- read the messages, if a port that is expected there isn't wait and keep on reading
-			 * -- if the port still hasn't sent a message by timeout milliseconds, then consider that port crashed
-			 */
-			/*
-			if(round > 1) { 
-				ArrayList<Integer> portsAlive = new ArrayList<Integer>(); 
-				Instant start = Instant.now();
-				while(participants != portsAlive) {
-					Instant currentTime = Instant.now();
-					Duration interval = Duration.between(start, currentTime);
-
-					if(interval.toMillis() >= timeout) {
-						ArrayList<Integer> portCrashed = new ArrayList<Integer>();
-						//any ports not in ports Alive should be considered crashed 
-						for(Integer ports : participantsNotCrashed) {
-							if(!portsAlive.contains(ports)) {
-								portCrashed.add(ports);
-								logger.participantCrashed(ports);
-							}
-						}
-						participantsNotCrashed.removeAll(portCrashed);
-						break;
-					}
-					portsAlive.addAll(checkingWhatRoundsHaveCrashed());
-
-				}
-			}
-			*/
+		for(int round = 1; round <= (participants.size()+2); round++) {
 
 			Instant start = Instant.now();
 			long roundStartTime = System.currentTimeMillis();
@@ -490,7 +438,7 @@ public class Participant {
 			HashSet<String> completedRound = new HashSet<String>();
 			completedRound.add(participantPortNumberLog.toString());
 			peer.multicastSend(completedRound);
-			*/
+			*/ 
 
 		}
 
