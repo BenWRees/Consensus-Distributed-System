@@ -81,7 +81,7 @@ public class PeerNode {
     		} else {
 
 	    		pw.println(txt);
-	    		System.out.println("MESSAGES SENT: " + txt + " to " + outputToSocket.get(pw).getPort());
+	    		System.out.println("MESSAGES SENT: " + txt + " Port: " + outputToSocket.get(pw).getPort() + " LocalPort: " + outputToSocket.get(pw).getLocalPort());
 	    		pw.flush();
 	    	}
 		}
@@ -122,7 +122,7 @@ public class PeerNode {
 					msg = in.readLine();
 					if(msg != null) {
 						flag = false;
-						System.out.println("MESSAGE RECEIVED: " + msg);
+						System.out.println("MESSAGE RECEIVED: " + msg + " Port: " + socket.getPort() + " LocalPort: " + socket.getLocalPort());
 
 						//need to remove the "Vote" 
 						msg = msg.replace("VOTE ", "");
@@ -273,22 +273,21 @@ public class PeerNode {
 
 	synchronized public void startReachingOut(Integer port, ArrayList<Integer> otherPorts, Integer timeout) {
 			initPorts = new ArrayList<Integer>();
+			System.out.println("otherPorts: " + otherPorts.toString());
 			for(Integer portToConnectTo : otherPorts) {
-				boolean flag = true;
+				//boolean flag = true;
 				Socket socket = null;
-				while(flag) {
-					try {
-						socket = new Socket("localhost", portToConnectTo);
-						connectionsToOtherPorts.add(socket);
-						System.out.println("PEER CONNECTED SOCKET: " + socket.getPort());
-						initPorts.add(portToConnectTo);
-						flag = false;
-					} catch(IOException e) {
-						System.out.println(portToConnectTo + " HAS CRASHED");
-						//initPorts.remove(portToConnectTo);
-						flag = false;
-						continue;
-					}
+				try {
+					socket = new Socket("localhost", portToConnectTo);
+					connectionsToOtherPorts.add(socket);
+					System.out.println("PEER CONNECTED SOCKET: " + socket.getPort());
+					initPorts.add(portToConnectTo);
+					//flag = false;
+				} catch(IOException e) {
+					System.out.println(portToConnectTo + " HAS CRASHED");
+					//initPorts.remove(portToConnectTo);
+					//flag = false;
+					continue;
 				}
 				//Unnecessary wait - remove
 				/*
@@ -335,6 +334,9 @@ public class PeerNode {
 					continue;
 				}
 
+				//Check if the 
+
+
 				System.out.println("CLIENT CONNECTED: " + client.getPort());
 				
 				portsConnectedToPeer.add(client);
@@ -350,9 +352,18 @@ public class PeerNode {
 			System.out.println("portsConnectedToPeer: " + portsConnectedToPeer.toString());
 			sendConnectionsToOtherPorts(port);
 			portsAccepted.addAll(receiveConnectionsToOtherPorts());
-
 					
 	}
+
+	/*
+	 * checks if the client port can indeed send
+	 *
+	 */
+	/*
+	public boolean checkIfClientPortIsAlive(Socket clientPort) {
+
+	}
+	*/
 
 	public void sendConnectionsToOtherPorts(Integer port) {
 		for(Socket sock : connectionsToOtherPorts) {
@@ -362,6 +373,7 @@ public class PeerNode {
 		} 
 
 		multicastSend(connectionToOtherPortsLocalPorts);
+		
 	}
 
 	public ArrayList<Integer> receiveConnectionsToOtherPorts() {
@@ -405,7 +417,7 @@ public class PeerNode {
 	}
 
 
-		synchronized public ArrayList<String> multicastReceiveInitial() {
+	synchronized public ArrayList<String> multicastReceiveInitial() {
 		messages.clear();
 		for(Socket socket: connectionsToOtherPorts) {
 			System.out.println("trying to receive from: " + socket.getPort());
